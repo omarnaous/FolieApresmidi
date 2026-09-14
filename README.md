@@ -6,11 +6,14 @@ film as the hero. Épicée. Libre.
 The catalogue is the real one: **54 products** pulled from the live Shopify
 store, with its own prices, sizes, colours, descriptions and photography.
 
+**Live:** https://omarnaous.github.io/FolieApresmidi/
+
 ```bash
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # → dist/
 npm run catalogue  # re-pull the 54 products from the live store
+npm run deploy     # build + publish to GitHub Pages
 ```
 
 The home page shows **10 pieces**; the full 54 live behind *Search* in the nav
@@ -168,6 +171,31 @@ it; closing the quick view leaves the catalogue where it was.
   the screen edge, out of line with the heading above it.
 
 ---
+
+## Deploying
+
+GitHub Pages serves this repo from the **gh-pages** branch root, and
+`npm run deploy` is the whole pipeline: build, replace that branch's contents
+with `dist/`, push. It runs in a throwaway worktree, so your working tree is
+never touched.
+
+Two things that matter for a project page (served from `/FolieApresmidi/`,
+not a domain root):
+
+- `vite.config.js` sets `base` to that subpath **for builds only**, so dev stays
+  on `/`.
+- Vite rewrites asset URLs it can see — imports, CSS `url()`, `index.html` — but
+  **not plain strings**. The frames in `src/data/assets.js` are hand-written
+  paths, so they are built off `import.meta.env.BASE_URL`. Add any new
+  `public/` path the same way or it will 404 in production while working fine
+  locally.
+
+Renaming the repo means changing `base` and rebuilding.
+
+There is no Actions workflow: pushing `.github/workflows/` needs a token with
+the `workflow` scope, and the CLI is authorised for `repo` only. If you add that
+scope (`gh auth refresh -s workflow`), a standard `actions/deploy-pages` job can
+replace the script.
 
 ## Wiring it up for real
 
