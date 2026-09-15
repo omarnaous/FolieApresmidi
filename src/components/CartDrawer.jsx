@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useCart, money } from '../store/cart';
 
-export default function CartDrawer() {
+export default function CartDrawer({ onCheckout }) {
   const { lines, count, subtotal, open, closeCart, qty, remove } = useCart();
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function CartDrawer() {
             <b>{money(subtotal)}</b>
           </div>
           <span className="label muted">Shipping and duties calculated at checkout.</span>
-          <button className="btn solid block" data-cursor="Checkout">Checkout</button>
+          <button className="btn solid block" data-cursor="Checkout" onClick={onCheckout}>Checkout</button>
         </div>
       )}
     </aside>

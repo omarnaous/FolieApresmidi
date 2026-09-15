@@ -16,6 +16,7 @@ import PopUps from './components/PopUps';
 import Newsletter from './components/Newsletter';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
+import Checkout from './components/Checkout';
 import ProductPage from './components/ProductPage';
 import { useCart } from './store/cart';
 
@@ -24,6 +25,7 @@ export default function App() {
   const [menu, setMenu] = useState(false);
   const [quick, setQuick] = useState(null);
   const [catalogue, setCatalogue] = useState({ open: false, category: 'All' });
+  const [checkout, setCheckout] = useState(false);
   const { open: cartOpen, closeCart, toast } = useCart();
   const lenis = useRef(null);
 
@@ -59,7 +61,7 @@ export default function App() {
   }, []);
 
   /* One place decides whether the page may scroll. */
-  const locked = !ready || menu || cartOpen || !!quick || catalogue.open;
+  const locked = !ready || menu || cartOpen || !!quick || catalogue.open || checkout;
   useEffect(() => {
     document.body.classList.toggle('is-locked', locked);
     if (lenis.current) locked ? lenis.current.stop() : lenis.current.start();
@@ -105,7 +107,8 @@ export default function App() {
         onClose={() => setCatalogue((c) => ({ ...c, open: false }))}
         onOpen={setQuick}
       />
-      <CartDrawer />
+      <CartDrawer onCheckout={() => { closeCart(); setCheckout(true); }} />
+      <Checkout open={checkout} onClose={() => setCheckout(false)} />
       <ProductPage product={quick} onClose={() => setQuick(null)} onOpen={setQuick} />
 
       <div className={`toast ${toast ? 'on' : ''}`} role="status" aria-live="polite">

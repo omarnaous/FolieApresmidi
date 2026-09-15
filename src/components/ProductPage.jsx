@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PRODUCTS } from '../data/products';
 import { useCart, money } from '../store/cart';
+import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 
 /** Swatch dots for the colour names the store actually uses. */
 const DOT = {
@@ -93,9 +94,17 @@ export default function ProductPage({ product, onClose, onOpen }) {
 
   const more = useMemo(() => related(p), [p]);
 
+  // swipe down from the top to leave — the gallery keeps its own sideways swipes
+  useSwipeDismiss(scroller, onClose, { enabled: !!product });
+
   // data-lenis-prevent: opening this stops Lenis, and a stopped Lenis
   // preventDefaults every touchmove — including the ones meant for this page.
-  if (!p) return <div className="pdp" aria-hidden="true" data-lenis-prevent />;
+  // The ref goes on the placeholder too. React reconciles it with the real
+  // sheet below as the same div.pdp, so the node is stable from first render
+  // — without it the swipe effect ran once against a null element (the first
+  // render after a product is picked still has cached === null) and, with
+  // nothing in its deps changing afterwards, never re-attached.
+  if (!p) return <div className="pdp" aria-hidden="true" ref={scroller} data-lenis-prevent />;
 
   const open = !!product;
   const needsColour = p.colours.length > 0;
