@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useCart } from '../store/cart';
-
-const LINKS = [
-  { label: 'Boutique', href: '#boutique' },
-  { label: 'Lookbook', href: '#lookbook' },
-  { label: 'Maison', href: '#maison' },
-  { label: 'Pop-ups', href: '#popups' },
-];
+import { SECTIONS } from '../data/sections';
 
 export default function Nav({ onMenu, menuOpen, onSearch }) {
   const { count, openCart } = useCart();
@@ -34,8 +28,8 @@ export default function Nav({ onMenu, menuOpen, onSearch }) {
       </a>
 
       <nav className="nav-links" aria-label="Primary">
-        {LINKS.map((l) => (
-          <a key={l.href} className="label link-u" href={l.href}>{l.label}</a>
+        {SECTIONS.map((s) => (
+          <a key={s.href} className="label link-u" href={s.href}>{s.short}</a>
         ))}
       </nav>
 

@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import Reveal from './Reveal';
 import { LOOKS } from '../data/assets';
 import { DROP } from '../data/products';
+import { eyebrow } from '../data/sections';
 import { money } from '../store/cart';
 
 export default function Lookbook({ onOpen }) {
@@ -28,11 +29,11 @@ export default function Lookbook({ onOpen }) {
   const maybeOpen = (p) => { if (drag.current.moved < 6) onOpen(p); };
 
   return (
-    <section className="section" id="lookbook" style={{ paddingBottom: 'clamp(60px, 9vw, 120px)' }}>
+    <section className="section tight-top" id="lookbook" style={{ paddingBottom: 'clamp(60px, 9vw, 120px)' }}>
       <div className="shell">
         <div className="sec-head">
           <div>
-            <div className="label muted" style={{ marginBottom: 14 }}>03 — Lookbook</div>
+            <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow('#lookbook')}</div>
             <h2 className="display d-md">{DROP}</h2>
           </div>
           <div className="label muted">Drag —&gt;</div>

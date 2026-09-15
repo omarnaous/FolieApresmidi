@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Reveal from './Reveal';
 import { FEED, post } from '../data/assets';
+import { eyebrow } from '../data/sections';
 
 const ROWS = FEED.slice(0, 6);
 
@@ -14,21 +15,12 @@ export default function Feed() {
   const active = ROWS[i];
 
   return (
-    <section className="section shell" id="maison">
+    <section className="section shell tight-top" id="maison">
       <div className="sec-head">
         <div>
-          <div className="label muted" style={{ marginBottom: 14 }}>02 — The house</div>
+          <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow('#maison')}</div>
           <h2 className="display d-md">The afternoon, <i className="italic">lately</i></h2>
         </div>
-        <a
-          className="label link-u"
-          href="https://instagram.com/folliesdapresmidi"
-          target="_blank"
-          rel="noreferrer noopener"
-          data-cursor="Instagram"
-        >
-          @folliesdapresmidi ↗
-        </a>
       </div>
 
       <div className="feed">

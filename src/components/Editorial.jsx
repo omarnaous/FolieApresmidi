@@ -1,13 +1,14 @@
 import React from 'react';
 import Reveal from './Reveal';
 import { EDITO } from '../data/assets';
+import { eyebrow } from '../data/sections';
 import { money } from '../store/cart';
 
 export default function Editorial({ onOpen }) {
   const [hero, a, b] = EDITO;
 
   return (
-    <section className="section shell" id="journal">
+    <section className="section shell tight-top" id="journal">
       <div className="edito">
         <Reveal
           variant="rv-mask"
@@ -19,7 +20,7 @@ export default function Editorial({ onOpen }) {
         </Reveal>
 
         <div className="edito-txt">
-          <Reveal><div className="label muted">02 — The house</div></Reveal>
+          <Reveal><div className="label muted">{eyebrow('#journal')}</div></Reveal>
           <Reveal delay={90}>
             <h2 className="display d-md">
               Limited quantities.<br />

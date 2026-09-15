@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { PRODUCTS, CATEGORIES, DROP } from '../data/products';
+import { eyebrow } from '../data/sections';
 import ProductCard from './ProductCard';
 import Reveal from './Reveal';
 
@@ -26,7 +27,7 @@ export default function Shop({ onOpen, onAll }) {
     <section className="section shell" id="boutique" style={{ paddingTop: 'clamp(60px, 9vh, 120px)' }}>
       <div className="sec-head">
         <div>
-          <div className="label muted" style={{ marginBottom: 14 }}>01 — The boutique</div>
+          <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow('#boutique')}</div>
           <h2 className="display d-md">{DROP}</h2>
         </div>
         <div className="filters">

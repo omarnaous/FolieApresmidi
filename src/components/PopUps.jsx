@@ -1,13 +1,14 @@
 import React from 'react';
 import Reveal from './Reveal';
 import { POPUPS } from '../data/products';
+import { eyebrow } from '../data/sections';
 
 export default function PopUps() {
   return (
     <section className="section shell" id="popups">
       <div className="sec-head">
         <div>
-          <div className="label muted" style={{ marginBottom: 14 }}>04 — In person</div>
+          <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow('#popups')}</div>
           <h2 className="display d-md">End of summer <i className="italic">pop-ups</i></h2>
         </div>
         <p className="label muted" style={{ maxWidth: 260, lineHeight: 1.9 }}>

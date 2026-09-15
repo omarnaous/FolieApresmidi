@@ -1,13 +1,9 @@
 import React from 'react';
 import { FEED, post } from '../data/assets';
 import { useCart } from '../store/cart';
+import { SECTIONS } from '../data/sections';
 
-const LINKS = [
-  ['Boutique', '#boutique'],
-  ['Échappée 4 à 7', '#lookbook'],
-  ['The house', '#maison'],
-  ['Pop-ups', '#popups'],
-];
+const LINKS = SECTIONS.map((s) => [s.label, s.href]);
 
 const STRIP = FEED.slice(0, 3);
 
