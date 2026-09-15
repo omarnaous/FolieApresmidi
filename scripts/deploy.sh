@@ -16,7 +16,18 @@ cd "$ROOT"
 npm run build
 
 git worktree prune
-git worktree add -B gh-pages "$WORKTREE" main -q
+
+# Base the worktree on the published branch so the deploy commit stacks on
+# the history the remote already has. Branching from main instead would
+# diverge and the push would be rejected on any clone that hasn't deployed
+# before -- which is every fresh clone. Fall back to main on a first deploy,
+# when there is no gh-pages upstream yet.
+if git fetch -q origin gh-pages 2>/dev/null; then
+  BASE=origin/gh-pages
+else
+  BASE=main
+fi
+git worktree add -B gh-pages "$WORKTREE" "$BASE" -q
 
 cd "$WORKTREE"
 git rm -rq --cached .
