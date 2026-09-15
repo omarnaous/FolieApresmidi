@@ -525,10 +525,10 @@ a { color: inherit; text-decoration: none; }
 .card-quick {
   position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 4;
   padding: 13px;
-  background: rgba(242, 237, 230, 0.93);
-  backdrop-filter: blur(8px);
+  background: var(--terra);
+  color: var(--bone);
   text-align: center;
-  border-radius: 2px;
+  border-radius: 999px;
   font-size: 10px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase;
   opacity: 0; transform: translateY(10px);
   transition: opacity 0.5s var(--ease), transform 0.5s var(--ease), background 0.35s var(--ease);
@@ -688,45 +688,8 @@ a { color: inherit; text-decoration: none; }
 
 .empty { display: grid; place-items: center; gap: 16px; height: 100%; text-align: center; color: var(--ash); }
 
-/* Quick view */
-
-.qv {
-  position: fixed; inset: auto 0 0 0; z-index: 160;
-  max-height: 92svh;
-  background: var(--bone);
-  transform: translateY(101%);
-  transition: transform 0.8s var(--ease);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  overflow: hidden;
-}
-.qv.on { transform: none; }
-
-.qv-media { position: relative; background: var(--bone); min-height: 0; }
-
-/* The strip holds every shot. On a wide panel only the selected one is
-   laid out; on a phone they all are, and the row scroll-snaps. */
-.qv-strip { display: flex; height: 100%; }
-.qv-cell { display: none; }
-.qv-cell.on { display: block; flex: 1; height: 100%; }
-.qv-cell img { object-fit: contain; padding: clamp(16px, 3vw, 46px); }
-
-.qv-info {
-  padding: clamp(24px, 3.4vw, 54px);
-  display: flex; flex-direction: column; gap: 18px;
-  overflow-y: auto;
-  min-height: 0;
-}
-
-.qv-close {
-  position: absolute; top: 14px; right: 14px; z-index: 9;
-  padding: 11px 18px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--bone);
-  transition: background 0.4s var(--ease), color 0.4s var(--ease);
-}
-.qv-close:hover { background: var(--chili); }
+/* ══ VARIANT CONTROLS ════════════════════════════════════
+   Shared by the product page and anywhere else a variant is picked. */
 
 .sizes { display: flex; gap: 7px; flex-wrap: wrap; }
 .size {
@@ -751,49 +714,156 @@ a { color: inherit; text-decoration: none; }
 .swatch.on { background: var(--ink); color: var(--bone); border-color: var(--ink); }
 .size:disabled, .swatch:disabled { opacity: 0.3; cursor: not-allowed; text-decoration: line-through; }
 
-.qv-thumbs { position: absolute; left: 16px; bottom: 16px; z-index: 9; display: flex; gap: 7px; }
-.qv-thumbs button {
-  width: 42px; aspect-ratio: 4/5; overflow: hidden; background: var(--bone);
-  border: 1px solid transparent; transition: border-color 0.35s var(--ease);
-}
-.qv-thumbs button.on { border-color: var(--ink); }
-.qv-thumbs img { width: 100%; height: 100%; object-fit: cover; mix-blend-mode: multiply; }
-
 .spec { display: flex; gap: 14px; padding-block: 11px; border-top: 1px solid var(--ink-07); }
 .spec dt { flex: 0 0 90px; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ash); }
 .spec dd { margin: 0; font-size: 13px; color: var(--ink-80); }
 
-@media (max-width: 860px) {
-  /* one column, and the whole sheet scrolls — the piece is the first
-     thing you see, then the detail under it */
-  .qv {
+/* ══ PRODUCT PAGE ════════════════════════════════════════
+   A full page, not a sheet: one scroller, every shot at full
+   width in a column, and a buy panel that sticks beside them. */
+
+.pdp {
+  position: fixed; inset: 0; z-index: 160;
+  background: var(--bone);
+  color: var(--ink);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(18px);
+  transition: opacity 0.5s var(--ease), transform 0.6s var(--ease),
+    visibility 0s linear 0.6s;
+}
+.pdp.on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 0.5s var(--ease), transform 0.6s var(--ease),
+    visibility 0s linear 0s;
+}
+
+.pdp-bar {
+  position: sticky; top: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  height: var(--nav-h);
+  padding-inline: var(--pad);
+  padding-top: env(safe-area-inset-top, 0px);
+  /* nearly opaque: at 0.88 the spec table read straight through the bar */
+  background: rgba(242, 237, 230, 0.97);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--ink-07);
+}
+.pdp-back, .pdp-x { color: var(--ink-45); transition: color 0.35s var(--ease); }
+.pdp-back:hover, .pdp-x:hover { color: var(--ink); }
+.pdp-mark { font-family: var(--serif); font-size: 19px; letter-spacing: 0.02em; }
+
+.pdp-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+  gap: clamp(20px, 3vw, 54px);
+  padding: clamp(18px, 2.4vw, 40px) var(--pad) 0;
+  align-items: start;
+}
+
+.pdp-gallery { display: flex; flex-direction: column; gap: clamp(10px, 1.4vw, 20px); min-width: 0; }
+.pdp-shot { position: relative; margin: 0; aspect-ratio: 4 / 5; }
+.pdp-shot img { width: 100%; height: 100%; object-fit: cover; }
+.pdp-num {
+  position: absolute; left: 14px; bottom: 12px;
+  color: var(--ink-45);
+  mix-blend-mode: multiply;
+}
+
+/* The panel rides along instead of scrolling away, so Add to bag is
+   reachable from anywhere in the gallery. */
+.pdp-buy { position: sticky; top: calc(var(--nav-h) + 22px); min-width: 0; }
+.pdp-buy-inner { display: flex; flex-direction: column; gap: 20px; }
+
+.pdp-name {
+  font-size: clamp(34px, 4vw, 62px);
+  line-height: 0.98;
+  letter-spacing: -0.018em;
+  margin: 12px 0 0;
+}
+.pdp-price { font-family: var(--serif); font-size: clamp(22px, 2vw, 29px); }
+.pdp-note { font-size: 15px; line-height: 1.55; color: var(--ink-80); margin: 0; max-width: 46ch; }
+
+.pdp-field { display: flex; flex-direction: column; gap: 11px; }
+.pdp-field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+/* "waiting" is not disabled: the button still takes the tap and walks you
+   to the choice you have not made yet. */
+.pdp-add { margin-top: 4px; }
+.pdp-add.waiting, .pdp-dock-add.waiting { opacity: 0.45; }
+
+.pdp-field.nudge .sizes .size,
+.pdp-field.nudge .swatches .swatch { animation: nudge 0.42s var(--ease) 2; }
+@keyframes nudge {
+  0%, 100% { border-color: var(--ink-14); }
+  50% { border-color: var(--terra); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pdp-field.nudge .sizes .size,
+  .pdp-field.nudge .swatches .swatch { animation: none; border-color: var(--terra); }
+}
+
+.pdp-specs { margin: 6px 0 0; }
+
+/* Related pieces — browsing shouldn't dead-end on one product. */
+.pdp-more {
+  padding: clamp(54px, 7vw, 110px) var(--pad) clamp(60px, 8vw, 120px);
+  margin-top: clamp(40px, 5vw, 80px);
+  border-top: 1px solid var(--ink-14);
+}
+.pdp-more-head { margin-bottom: clamp(18px, 2vw, 30px); }
+.pdp-more-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gut) clamp(12px, 1.6vw, 22px);
+}
+.pdp-rel { display: block; width: 100%; text-align: left; }
+.pdp-rel-plate { display: block; aspect-ratio: 4 / 5; }
+.pdp-rel-plate img { width: 100%; height: 100%; object-fit: cover; }
+.pdp-rel-meta { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding-top: 12px; }
+.pdp-rel-name { font-family: var(--serif); font-size: 17px; line-height: 1.15; }
+.pdp-rel:hover .pdp-rel-name { text-decoration: underline; text-underline-offset: 3px; }
+
+/* The dock is a phone affordance; a wide screen has the sticky panel. */
+.pdp-dock { display: none; }
+
+@media (max-width: 900px) {
+  .pdp-body {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    gap: clamp(22px, 4vw, 34px);
+    padding-inline: 0;
   }
-  .qv-media { position: sticky; top: 0; padding-top: 14px; }
-  .qv-strip {
-    height: auto;
-    gap: 8px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: var(--pad);
-    padding-inline: var(--pad);
-    scrollbar-width: none;
+  .pdp-gallery { gap: 6px; }
+  .pdp-shot { aspect-ratio: 3 / 4; }
+  .pdp-buy { position: static; padding-inline: var(--pad); }
+  /* clear the dock so the last spec isn't trapped under it */
+  .pdp-more { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .pdp-more-grid { grid-template-columns: repeat(2, 1fr); }
+
+  .pdp-dock {
+    position: sticky; bottom: 0; z-index: 12;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px;
+    padding: 12px var(--pad);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: rgba(242, 237, 230, 0.97);
+    backdrop-filter: blur(14px) saturate(1.2);
+    border-top: 1px solid var(--ink-14);
   }
-  .qv-strip::-webkit-scrollbar { display: none; }
-  .qv-cell,
-  .qv-cell.on {
-    display: block;
-    flex: 0 0 76%;
-    height: auto;
-    aspect-ratio: 4 / 5;
-    scroll-snap-align: center;
-  }
-  .qv-cell img { padding: 0; }
-  .qv-info { overflow: visible; padding-top: 22px; }
-  .qv-thumbs { display: none; }
+  .pdp-dock-price { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .pdp-dock-add { flex: 0 0 auto; padding-inline: 26px; }
+  .pdp-dock-add:disabled { opacity: 0.4; }
+}
+
+@media (max-width: 420px) {
+  .pdp-more-grid { gap: 18px 12px; }
 }
 
 /* Mobile menu */
@@ -908,16 +978,29 @@ a { color: inherit; text-decoration: none; }
 
 /* ══ Toast ═══════════════════════════════════════════════ */
 
+/* Hidden by opacity, not by transform alone: the empty pill is only 28px
+   tall, so translating it 130% moved it 36px against a 26px offset and
+   left a black sliver parked at the bottom of every page. */
 .toast {
   position: fixed; left: 50%; bottom: 26px; z-index: 170;
   transform: translate(-50%, 130%);
   background: var(--ink); color: var(--bone);
   padding: 14px 24px; border-radius: 999px;
   display: flex; align-items: center; gap: 12px;
-  transition: transform 0.7s var(--ease);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.7s var(--ease), opacity 0.4s var(--ease),
+    visibility 0s linear 0.7s;
   white-space: nowrap;
 }
-.toast.on { transform: translate(-50%, 0); }
+.toast.on {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+  transition: transform 0.7s var(--ease), opacity 0.4s var(--ease),
+    visibility 0s linear 0s;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

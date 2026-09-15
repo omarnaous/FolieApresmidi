@@ -33,7 +33,7 @@ export default function ProductCard({ product, index, onOpen }) {
         {!product.available && <span className="card-tag label" style={{ left: 'auto', right: 12 }}>Sold out</span>}
 
         <button className="card-quick" onClick={(e) => { e.stopPropagation(); onOpen(product); }}>
-          Quick view
+          View piece
         </button>
       </div>
 

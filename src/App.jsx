@@ -16,7 +16,7 @@ import PopUps from './components/PopUps';
 import Newsletter from './components/Newsletter';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
-import QuickView from './components/QuickView';
+import ProductPage from './components/ProductPage';
 import { useCart } from './store/cart';
 
 export default function App() {
@@ -96,7 +96,9 @@ export default function App() {
 
       <Footer />
 
-      <div className={`scrim ${cartOpen || quick ? 'on' : ''}`} onClick={closeAll} />
+      {/* the product page covers the screen on its own, so only the bag
+          needs a scrim behind it */}
+      <div className={`scrim ${cartOpen ? 'on' : ''}`} onClick={closeAll} />
       <Catalogue
         open={catalogue.open}
         initialCategory={catalogue.category}
@@ -104,7 +106,7 @@ export default function App() {
         onOpen={setQuick}
       />
       <CartDrawer />
-      <QuickView product={quick} onClose={() => setQuick(null)} />
+      <ProductPage product={quick} onClose={() => setQuick(null)} onOpen={setQuick} />
 
       <div className={`toast ${toast ? 'on' : ''}`} role="status" aria-live="polite">
         <span className="label">{toast || ''}</span>
