@@ -13,7 +13,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKTREE="$(mktemp -d)/gh-pages"
 
 cd "$ROOT"
-npm run build
+# GitHub Pages is a project page: the build needs the subpath. The default
+# build targets Cloudflare at the domain root.
+SITE_BASE=/FolieApresmidi/ npm run build
 
 git worktree prune
 

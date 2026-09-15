@@ -7,8 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "catalogue": "node scripts/pull-catalogue.mjs",
-    "deploy": "bash scripts/deploy.sh"
+    "catalogue": "node scripts/pull-catalogue.mjs && node scripts/gen-prices.mjs",
+    "deploy": "bash scripts/deploy.sh",
+    "prices": "node scripts/gen-prices.mjs",
+    "worker": "wrangler dev",
+    "cf:deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@remotion/player": "^4.0.524",
@@ -19,7 +22,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "wrangler": "^4.131.2"
   },
   "homepage": "https://omarnaous.github.io/FolieApresmidi/"
 }

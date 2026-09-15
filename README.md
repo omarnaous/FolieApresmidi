@@ -210,3 +210,63 @@ The storefront is complete but deliberately headless — three seams to connect:
 Prices are plain numbers in USD, matching the store (`money()` in
 `store/cart.jsx`) — swap that one helper for `Intl.NumberFormat` if you ever need
 LBP or multi-currency.
+
+## Cloudflare — hosting and the backend
+
+One Worker serves the built site and the API from the same origin, so there
+is no CORS and no second domain. Orders and sign-ups go to D1.
+
+```
+POST /api/order      place an order   -> orders
+POST /api/subscribe  newsletter       -> subscribers
+GET  /api/orders     read them back   (Authorization: Bearer $ADMIN_KEY)
+GET  /api/health     liveness
+```
+
+**Prices are never taken from the client.** The browser sends product ids and
+quantities; `worker/index.js` prices the basket from `worker/catalogue.js`,
+which `npm run catalogue` regenerates alongside `src/data/products.js`. A
+tampered request buying a $145 dress for $1 is charged $145.
+
+### First deploy
+
+The D1 database already exists (`fdm-store`,
+`ecba53f7-e059-45d2-90e7-c040b0e294f2`) with its schema applied.
+
+```bash
+npx wrangler login                                   # once, in a browser
+npx wrangler secret put ADMIN_KEY                    # any long random string
+npm run cf:deploy                                    # build + deploy
+```
+
+Or connect the repo under **Workers & Pages → Create → Connect to Git** and
+let every push to `main` deploy. Build command `npm run build`, no output
+directory needed — `wrangler.jsonc` points at `dist/`.
+
+### Locally
+
+```bash
+npm run worker      # miniflare + a local D1, no Cloudflare account needed
+```
+
+`.dev.vars` holds `ADMIN_KEY` for local runs and is gitignored. Apply the
+schema to the local database once:
+
+```bash
+npx wrangler d1 execute fdm-store --local --file=worker/schema.sql
+```
+
+### Reading orders
+
+```bash
+curl -H "authorization: Bearer $ADMIN_KEY" https://<your-worker>/api/orders
+```
+
+### GitHub Pages still works
+
+`npm run deploy` publishes to `gh-pages` as before — it sets
+`SITE_BASE=/FolieApresmidi/`, because a project page is served from a
+subpath while the Worker is served from the root. That copy has no API
+behind it: `src/lib/api.js` notices `/api/*` did not return JSON and the
+checkout and newsletter fall back to composing a mail, so an order is never
+silently lost.

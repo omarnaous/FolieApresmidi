@@ -1,0 +1,26 @@
+{
+  // Follies d'Après-Midi — one Worker serves the built site and the API.
+  // Deploy:  npx wrangler deploy      (after `npm run build`)
+  // Local :  npm run worker           (miniflare, local D1, no account needed)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fdm",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    // the Vite build; the Worker only sees a request the site has no file for
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // it is a single-page site: unknown paths render index.html, not a 404
+    "not_found_handling": "single-page-application",
+    // /api/* must always reach the Worker, never be answered by a file
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fdm-store",
+      "database_id": "ecba53f7-e059-45d2-90e7-c040b0e294f2"
+    }
+  ],
+  "observability": { "enabled": true }
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCart, money } from '../store/cart';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
+import { placeOrder } from '../lib/api';
 
 /** Where the order lands until there is an order system behind this. */
 const HOUSE = 'folliesdapresmidi@gmail.com';
@@ -47,6 +48,7 @@ export default function Checkout({ open, onClose }) {
   const [payment, setPayment] = useState('');
   const [bad, setBad] = useState({});
   const [done, setDone] = useState(null);
+  const [sending, setSending] = useState(false);
   const sheet = useRef(null);
 
   useSwipeDismiss(sheet, onClose, { enabled: open });
@@ -75,7 +77,7 @@ export default function Checkout({ open, onClose }) {
     return { items, total: money(subtotal) };
   }, [lines, subtotal]);
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     const problems = validate(values, payment);
     setBad(problems);
@@ -106,9 +108,34 @@ export default function Checkout({ open, onClose }) {
       `Order — ${values.name} — ${order.total}`,
     )}&body=${encodeURIComponent(body)}`;
 
-    setDone({ href: url, how, total: order.total, name: values.name });
-    clear();
-    window.location.href = url;
+    setSending(true);
+    const res = await placeOrder({ lines, payment, customer: values });
+    setSending(false);
+
+    if (res.ok) {
+      setDone({ id: res.data.id, how, total: order.total, name: values.name });
+      clear();
+      return;
+    }
+
+    // The Worker rejected specific fields — show them where the form did not.
+    if (res.fields) {
+      setBad(res.fields);
+      const k = Object.keys(res.fields)[0];
+      document.getElementById(`co-${k}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+
+    // No backend (GitHub Pages) or the network gave up: take the mail route
+    // rather than losing the order.
+    if (res.offline) {
+      setDone({ href: url, how, total: order.total, name: values.name });
+      clear();
+      window.location.href = url;
+      return;
+    }
+
+    setBad({ payment: res.error || 'We could not place that order. Try again.' });
   };
 
   const startOver = () => {
@@ -140,11 +167,23 @@ export default function Checkout({ open, onClose }) {
       {done ? (
         <div className="co-done">
           <h1 className="display d-md">Merci, {done.name.split(' ')[0]}.</h1>
-          <p className="lede">
-            Your mail app should be open with the order in it — send it and we have it.
-            Paying by {done.how}, {done.total}.
-          </p>
-          <a className="btn solid co-done-send" href={done.href}>Didn’t open? Send the order</a>
+          {done.id ? (
+            <>
+              <p className="lede">
+                We have it. Paying by {done.how}, {done.total} — we call to confirm
+                before it ships.
+              </p>
+              <p className="label muted">Order {done.id}</p>
+            </>
+          ) : (
+            <>
+              <p className="lede">
+                Your mail app should be open with the order in it — send it and we have it.
+                Paying by {done.how}, {done.total}.
+              </p>
+              <a className="btn solid co-done-send" href={done.href}>Didn’t open? Send the order</a>
+            </>
+          )}
           <button className="btn" onClick={startOver}>Back to the boutique</button>
         </div>
       ) : lines.length === 0 ? (
@@ -233,7 +272,9 @@ export default function Checkout({ open, onClose }) {
               <span className="label muted co-ship">
                 Delivery in Lebanon. We confirm by phone before it ships.
               </span>
-              <button type="submit" className="btn solid block">Place the order</button>
+              <button type="submit" className="btn solid block" disabled={sending}>
+                {sending ? 'Placing…' : 'Place the order'}
+              </button>
             </div>
           </aside>
         </form>
