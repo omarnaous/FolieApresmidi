@@ -1113,11 +1113,14 @@ a { color: inherit; text-decoration: none; }
 
 /* ══ FEED — the house section ════════════════════════════ */
 
+/* stretch, not center: the index is shorter than the plate, and centring it
+   left ~123px of dead column above and below that read as a hole in the
+   page. Letting the rows spread to the plate's height fills it instead. */
 .feed {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: clamp(20px, 4vw, 70px);
-  align-items: center;
+  align-items: stretch;
 }
 
 .feed-stage {
@@ -1152,12 +1155,16 @@ a { color: inherit; text-decoration: none; }
   mix-blend-mode: difference;
 }
 
-.feed-index { list-style: none; margin: 0; padding: 0; }
+.feed-index {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.feed-index li { display: flex; }
 .feed-row {
   display: grid;
   grid-template-columns: 2.4em 1fr auto;
   gap: clamp(10px, 1.6vw, 24px);
-  align-items: baseline;
+  align-items: center;
   width: 100%;
   text-align: left;
   padding-block: clamp(13px, 1.9vw, 24px);
@@ -1180,4 +1187,6 @@ a { color: inherit; text-decoration: none; }
   .feed { grid-template-columns: 1fr; gap: 24px; }
   .feed-stage { aspect-ratio: 3 / 4; }
   .feed-name { font-size: clamp(20px, 6vw, 30px); }
+  /* stacked, there is no plate height to fill — rows go back to their own */
+  .feed-index { display: block; }
 }

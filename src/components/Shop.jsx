@@ -15,6 +15,13 @@ export default function Shop({ onOpen, onAll }) {
     return { shown: list.slice(0, HOME_LIMIT), total: list.length };
   }, [active]);
 
+  // the heading already says Échappée 4 à 7 — only badge cards when the row
+  // actually holds both, otherwise every card carries the same sticker
+  const mixed = useMemo(
+    () => shown.some((p) => p.drop) && shown.some((p) => !p.drop),
+    [shown],
+  );
+
   return (
     <section className="section shell" id="boutique" style={{ paddingTop: 'clamp(60px, 9vh, 120px)' }}>
       <div className="sec-head">
@@ -37,7 +44,7 @@ export default function Shop({ onOpen, onAll }) {
 
       <div className="grid">
         {shown.map((p, i) => (
-          <ProductCard key={p.id} product={p} index={i} onOpen={onOpen} />
+          <ProductCard key={p.id} product={p} index={i} onOpen={onOpen} showDrop={mixed} />
         ))}
       </div>
 

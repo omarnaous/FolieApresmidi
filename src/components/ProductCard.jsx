@@ -2,7 +2,12 @@ import React from 'react';
 import Reveal from './Reveal';
 import { money } from '../store/cart';
 
-export default function ProductCard({ product, index, onOpen }) {
+/**
+ * `showDrop` comes from the grid, not the product: the catalogue sorts the
+ * drop to the front, so a badge on every visible card marks nothing. The
+ * grid only sets it when the pieces on screen are actually a mix.
+ */
+export default function ProductCard({ product, index, onOpen, showDrop = true }) {
   const [a, b] = product.images;
   const hasAlt = !!b;
   const sub = product.colours.length === 1
@@ -29,7 +34,7 @@ export default function ProductCard({ product, index, onOpen }) {
         />
         {hasAlt && <img className="alt" src={b} alt="" aria-hidden="true" loading="lazy" />}
 
-        {product.drop && <span className="card-tag label hot">Échappée</span>}
+        {product.drop && showDrop && <span className="card-tag label hot">Échappée</span>}
         {!product.available && <span className="card-tag label" style={{ left: 'auto', right: 12 }}>Sold out</span>}
 
         <button className="card-quick" onClick={(e) => { e.stopPropagation(); onOpen(product); }}>

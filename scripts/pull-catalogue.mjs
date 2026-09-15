@@ -38,6 +38,17 @@ const strip = (html) => (html ?? '')
 
 const sized = (src, w) => `${src.split('?')[0]}?width=${w}`;
 
+/**
+ * Spelling the storefront gets wrong, keyed by handle so a re-pull keeps the
+ * fix. Presentation only — nothing here changes a price, a variant or an id.
+ * Drop an entry once the store itself is corrected.
+ */
+const RENAME = {
+  'jupe-etagere': 'Étagère',
+  'nu-sous-le-cotton': 'Nu sous le coton',
+  'xtra-drapee-top': 'Nu sous le coton',
+};
+
 const main = async () => {
   const all = [];
   for (let page = 1; page <= 10; page += 1) {
@@ -65,7 +76,7 @@ const main = async () => {
     }));
     return {
       id: p.handle,
-      name: p.title.trim(),
+      name: RENAME[p.handle] ?? p.title.trim(),
       line: line[p.handle] ?? 'Objects',
       price: Math.min(...variants.map((v) => v.price)),
       images: p.images.slice(0, 4).map((i) => sized(i.src, 1400)),

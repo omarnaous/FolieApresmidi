@@ -50,6 +50,12 @@ export default function Catalogue({ open, onClose, onOpen, initialCategory = 'Al
     return sorted;
   }, [q, active, sort]);
 
+  // a badge on every card marks nothing — see ProductCard
+  const mixed = useMemo(
+    () => results.some((p) => p.drop) && results.some((p) => !p.drop),
+    [results],
+  );
+
   const range = results.length
     ? `${money(Math.min(...results.map((p) => p.price)))} – ${money(Math.max(...results.map((p) => p.price)))}`
     : null;
@@ -125,7 +131,7 @@ export default function Catalogue({ open, onClose, onOpen, initialCategory = 'Al
         ) : (
           <div className="grid">
             {results.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} onOpen={onOpen} />
+              <ProductCard key={p.id} product={p} index={i} onOpen={onOpen} showDrop={mixed} />
             ))}
           </div>
         )}

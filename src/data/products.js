@@ -250,7 +250,7 @@ export const PRODUCTS = [
   },
   {
     id: 'xtra-drapee-top',
-    name: 'Nu sous le cotton',
+    name: 'Nu sous le coton',
     line: 'Tops',
     price: 65,
     images: [
@@ -409,7 +409,7 @@ export const PRODUCTS = [
   },
   {
     id: 'jupe-etagere',
-    name: 'Etagère',
+    name: 'Étagère',
     line: 'Bottoms',
     price: 130,
     images: [
@@ -904,7 +904,7 @@ export const PRODUCTS = [
   },
   {
     id: 'nu-sous-le-cotton',
-    name: 'Nu sous le cotton',
+    name: 'Nu sous le coton',
     line: 'Tops',
     price: 65,
     images: [
