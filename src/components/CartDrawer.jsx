@@ -11,7 +11,14 @@ export default function CartDrawer() {
   }, [closeCart]);
 
   return (
-    <aside className={`drawer ${open ? 'on' : ''}`} aria-hidden={!open} aria-label="Shopping bag">
+    // data-lenis-prevent so the bag still scrolls on touch: a stopped Lenis
+    // preventDefaults every touchmove, nested scrollers included.
+    <aside
+      className={`drawer ${open ? 'on' : ''}`}
+      aria-hidden={!open}
+      aria-label="Shopping bag"
+      data-lenis-prevent
+    >
       <div className="drawer-head">
         <span className="label">Your bag {count > 0 && `(${count})`}</span>
         <button className="label link-u" onClick={closeCart}>Close</button>

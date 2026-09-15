@@ -44,7 +44,7 @@ export default function QuickView({ product, onClose }) {
     };
   }, [p, size, colour]);
 
-  if (!p) return <div className="qv" aria-hidden="true" />;
+  if (!p) return <div className="qv" aria-hidden="true" data-lenis-prevent />;
 
   const open = !!product;
 
@@ -52,7 +52,11 @@ export default function QuickView({ product, onClose }) {
   const ready = !!size && (!needsColour || !!colour);
 
   return (
-    <div className={`qv ${open ? 'on' : ''}`} role="dialog" aria-label={p.name} aria-hidden={!open}>
+    // data-lenis-prevent: opening this sheet stops Lenis, and a stopped Lenis
+    // calls preventDefault() on every touchmove it sees. Without the opt-out
+    // that kills scrolling inside the sheet too -- the panel and its image
+    // strip both go dead to touch on a phone.
+    <div className={`qv ${open ? 'on' : ''}`} role="dialog" aria-label={p.name} aria-hidden={!open} data-lenis-prevent>
       <button className="qv-close label" onClick={onClose} data-cursor="Close">Close</button>
 
       <div className="qv-media">

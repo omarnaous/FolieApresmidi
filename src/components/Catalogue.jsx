@@ -55,7 +55,9 @@ export default function Catalogue({ open, onClose, onOpen, initialCategory = 'Al
     : null;
 
   return (
-    <div className={`cat ${open ? 'on' : ''}`} aria-hidden={!open}>
+    // data-lenis-prevent so the results list and the chip rows still scroll on
+    // touch: a stopped Lenis preventDefaults every touchmove it sees.
+    <div className={`cat ${open ? 'on' : ''}`} aria-hidden={!open} data-lenis-prevent>
       <div className="cat-bar shell">
         <div className="cat-bar-top">
           <div>

@@ -15,7 +15,9 @@ export default function MobileMenu({ open, onClose, onSearch }) {
   const { count, openCart } = useCart();
 
   return (
-    <div className={`menu ${open ? 'on' : ''}`} aria-hidden={!open}>
+    // data-lenis-prevent: same reason as the other overlays -- Lenis is stopped
+    // while this is open and would preventDefault the menu's own touchmoves.
+    <div className={`menu ${open ? 'on' : ''}`} aria-hidden={!open} data-lenis-prevent>
       <div className="menu-top">
         <span className="nav-mark">FDM</span>
         <button className="menu-x" onClick={onClose} aria-label="Close menu">

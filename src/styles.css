@@ -990,7 +990,11 @@ a { color: inherit; text-decoration: none; }
 .cat-body { flex: 1; overflow-y: auto; padding-block: clamp(24px, 3vw, 40px) clamp(60px, 9vw, 110px); }
 .cat-empty { display: grid; place-items: center; gap: 16px; text-align: center; padding-block: clamp(60px, 12vh, 140px); }
 
-@media (max-width: 700px) { .cat-controls { flex-direction: column; gap: 10px; } }
+/* nowrap for the same reason as .sec-head below: a wrapping column flex
+   container sizes to its widest line, so the chip rows' ~930px min-content
+   width would beat align-items: stretch and run off the side of the sheet
+   with the later categories unreachable. */
+@media (max-width: 700px) { .cat-controls { flex-direction: column; gap: 10px; flex-wrap: nowrap; } }
 
 /* On a phone the chip rows scroll sideways instead of stacking into
    three ragged lines, and they bleed to the page edge so the row reads
