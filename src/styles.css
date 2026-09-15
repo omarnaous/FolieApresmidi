@@ -996,7 +996,12 @@ a { color: inherit; text-decoration: none; }
    three ragged lines, and they bleed to the page edge so the row reads
    as continuous rather than clipped. */
 @media (max-width: 760px) {
-  .sec-head { flex-direction: column; align-items: stretch; gap: 16px; }
+  /* nowrap matters: a multi-line column flex container sizes itself to its
+     widest line, so the wrapping default let the chip row's 930px min-content
+     width win over align-items: stretch. The row then inflated the document to
+     907px, the layout viewport expanded to match, and the nav's search / bag /
+     menu buttons landed off-screen on a phone. */
+  .sec-head { flex-direction: column; align-items: stretch; gap: 16px; flex-wrap: nowrap; }
   .filters,
   .filters.left,
   .filters.right {
