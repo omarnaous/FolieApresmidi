@@ -240,9 +240,16 @@ a { color: inherit; text-decoration: none; }
 .btn:hover::before { transform: none; }
 .btn.light { --c: var(--bone); }
 .btn.light:hover { color: var(--ink); }
-.btn.solid { background: var(--ink); color: var(--bone); }
-.btn.solid::before { background: var(--chili); }
-.btn.solid:hover { color: var(--bone); border-color: var(--chili); }
+/* The house's terracotta, not black: solid buttons are the actions —
+   add to bag, checkout, subscribe — and they carry the accent the badges
+   and the card button already use. */
+.btn.solid {
+  background: var(--terra);
+  border-color: var(--terra);
+  color: var(--bone);
+}
+.btn.solid::before { background: var(--ink); }
+.btn.solid:hover { color: var(--bone); border-color: var(--ink); }
 .btn.block { width: 100%; }
 
 .link-u {
@@ -768,8 +775,11 @@ a { color: inherit; text-decoration: none; }
   align-items: start;
 }
 
+.pdp-media { min-width: 0; }
 .pdp-gallery { display: flex; flex-direction: column; gap: clamp(10px, 1.4vw, 20px); min-width: 0; }
 .pdp-shot { position: relative; margin: 0; aspect-ratio: 4 / 5; }
+/* dots belong to the swipeable phone gallery; the column needs no index */
+.pdp-dots { display: none; }
 .pdp-shot img { width: 100%; height: 100%; object-fit: cover; }
 .pdp-num {
   position: absolute; left: 14px; bottom: 12px;
@@ -840,8 +850,40 @@ a { color: inherit; text-decoration: none; }
     gap: clamp(22px, 4vw, 34px);
     padding-inline: 0;
   }
-  .pdp-gallery { gap: 6px; }
-  .pdp-shot { aspect-ratio: 3 / 4; }
+  /* A row you swipe, not a column you scroll past. Vertical drags still
+     reach the page: the snap axis is x, so the browser hands a mostly
+     vertical gesture to the page scroller instead of the carousel. */
+  .pdp-gallery {
+    flex-direction: row;
+    gap: 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pdp-gallery::-webkit-scrollbar { display: none; }
+  .pdp-shot {
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    aspect-ratio: 3 / 4;
+  }
+  .pdp-num { display: none; }
+
+  .pdp-dots {
+    display: flex; justify-content: center; gap: 7px;
+    padding-top: 14px;
+  }
+  /* the global button reset clears the border but not the UA padding, which
+     would stretch a 7px square into a pill */
+  .pdp-dot {
+    width: 7px; height: 7px; padding: 0; flex: none;
+    border-radius: 999px;
+    background: var(--ink-14);
+    transition: background 0.35s var(--ease), transform 0.35s var(--ease);
+  }
+  .pdp-dot.on { background: var(--terra); transform: scale(1.35); }
   .pdp-buy { position: static; padding-inline: var(--pad); }
   /* clear the dock so the last spec isn't trapped under it */
   .pdp-more { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }

@@ -26,6 +26,8 @@ export default function ProductPage({ product, onClose, onOpen }) {
   const [cached, setCached] = useState(product);
   const scroller = useRef(null);
   const picker = useRef(null);
+  const gallery = useRef(null);
+  const [shot, setShot] = useState(0);
 
   useEffect(() => {
     if (product) { setCached(product); return; }
@@ -40,9 +42,28 @@ export default function ProductPage({ product, onClose, onOpen }) {
     setSize(p.sizes.length === 1 ? p.sizes[0] : null);
     setColour(p.colours.length === 1 ? p.colours[0] : null);
     setAdded(false);
+    setShot(0);
     // a new piece always starts at the top, never mid-way down the last one
     scroller.current?.scrollTo({ top: 0, behavior: 'auto' });
+    gallery.current?.scrollTo({ left: 0, behavior: 'auto' });
   }, [p]);
+
+  /* On a phone the gallery is a swipeable row, so the dots follow the
+     scroll rather than the other way round. Above 900px it is a stacked
+     column and scrollLeft never moves, which leaves shot at 0 — harmless,
+     since the dots are hidden there. */
+  const onGalleryScroll = () => {
+    const el = gallery.current;
+    if (!el || !el.clientWidth) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    setShot((n) => (n === i ? n : i));
+  };
+
+  const goToShot = (i) => {
+    const el = gallery.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const esc = (e) => e.key === 'Escape' && onClose();
@@ -103,21 +124,38 @@ export default function ProductPage({ product, onClose, onOpen }) {
       </header>
 
       <div className="pdp-body">
-        {/* Every shot, at full width, in one column. Scrolling the page is
-            the only gesture needed — no strip, no thumbnails, no carousel. */}
-        <div className="pdp-gallery">
-          {p.images.map((src, i) => (
-            <figure className="pdp-shot plate packshot" key={src}>
-              <img
-                src={src}
-                alt={`${p.name}${i ? ` — view ${i + 1}` : ''}`}
-                loading={i === 0 ? 'eager' : 'lazy'}
-              />
-              {p.images.length > 1 && (
-                <figcaption className="pdp-num label">{String(i + 1).padStart(2, '0')}</figcaption>
-              )}
-            </figure>
-          ))}
+        {/* One markup for both: a stacked column on a wide screen, a
+            swipeable snapping row on a phone. */}
+        <div className="pdp-media">
+          <div className="pdp-gallery" ref={gallery} onScroll={onGalleryScroll}>
+            {p.images.map((src, i) => (
+              <figure className="pdp-shot plate packshot" key={src}>
+                <img
+                  src={src}
+                  alt={`${p.name}${i ? ` — view ${i + 1}` : ''}`}
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                />
+                {p.images.length > 1 && (
+                  <figcaption className="pdp-num label">{String(i + 1).padStart(2, '0')}</figcaption>
+                )}
+              </figure>
+            ))}
+          </div>
+
+          {p.images.length > 1 && (
+            <div className="pdp-dots" role="tablist" aria-label="Views">
+              {p.images.map((src, i) => (
+                <button
+                  key={src}
+                  role="tab"
+                  aria-selected={i === shot}
+                  aria-label={`View ${i + 1}`}
+                  className={`pdp-dot ${i === shot ? 'on' : ''}`}
+                  onClick={() => goToShot(i)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Sticky on a wide screen, so the buy panel never scrolls away. */}
