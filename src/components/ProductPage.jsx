@@ -55,8 +55,20 @@ export default function ProductPage({ product, onClose, onOpen }) {
   const onGalleryScroll = () => {
     const el = gallery.current;
     if (!el || !el.clientWidth) return;
-    const i = Math.round(el.scrollLeft / el.clientWidth);
-    setShot((n) => (n === i ? n : i));
+    const pos = el.scrollLeft / el.clientWidth;
+    setShot((n) => {
+      const i = Math.round(pos);
+      return n === i ? n : i;
+    });
+    /* Each shot drifts against the swipe and the one leaving dims, so the
+       cells read as layered rather than as one sheet sliding. Written to a
+       custom property per cell — the transform itself lives in the
+       stylesheet, and the browser composites it. */
+    for (const cell of el.children) {
+      const d = cell.offsetLeft / el.clientWidth - pos; // -1 .. 0 .. 1
+      cell.style.setProperty('--d', d.toFixed(3));
+      cell.style.setProperty('--ad', Math.min(1, Math.abs(d)).toFixed(3));
+    }
   };
 
   const goToShot = (i) => {
@@ -143,16 +155,18 @@ export default function ProductPage({ product, onClose, onOpen }) {
           </div>
 
           {p.images.length > 1 && (
-            <div className="pdp-dots" role="tablist" aria-label="Views">
+            <div className="pdp-marks" role="tablist" aria-label="Views">
               {p.images.map((src, i) => (
                 <button
                   key={src}
                   role="tab"
                   aria-selected={i === shot}
                   aria-label={`View ${i + 1}`}
-                  className={`pdp-dot ${i === shot ? 'on' : ''}`}
+                  className={`pdp-mark-n label ${i === shot ? 'on' : ''}`}
                   onClick={() => goToShot(i)}
-                />
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </button>
               ))}
             </div>
           )}

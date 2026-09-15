@@ -37,7 +37,10 @@
 
 * { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+/* overscroll-behavior reaches the viewport from the root element, so the
+   back-swipe has to be refused here — on body it is ignored. Without it a
+   right-swipe on the first shot of a product gallery navigated away. */
+html { -webkit-text-size-adjust: 100%; overscroll-behavior-x: none; }
 
 html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
@@ -53,6 +56,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* The back-swipe is owned by the viewport, so a nested carousel cannot
+     refuse it on its own: without this, swiping right on the first shot of
+     a product gallery navigated away and unloaded the site. */
+  overscroll-behavior-x: none;
 }
 
 body.is-locked { overflow: hidden; }
@@ -188,6 +195,10 @@ a { color: inherit; text-decoration: none; }
   transition-delay: inherit;
 }
 .rv-mask.in > .rv-curtain { clip-path: inset(0 0 0 0); }
+/* Belt and braces for the same failure: pinned to the box rather than asking
+   height: 100% to resolve, so a curtain over a plate can never collapse to
+   zero and clip its own photo away. Only safe where the plate is positioned. */
+.feed-stage > .rv-curtain { position: absolute; inset: 0; height: auto; }
 
 .rv-img img { transform: scale(1.14); }
 .rv-img.in img { transform: scale(1); }
@@ -498,8 +509,11 @@ a { color: inherit; text-decoration: none; }
   font-size: 10px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase;
   transition: background 0.45s var(--ease), color 0.45s var(--ease), border-color 0.45s var(--ease);
 }
-.chip:hover { border-color: var(--ink); }
-.chip.on { background: var(--ink); color: var(--bone); border-color: var(--ink); }
+/* One rule across the site: chosen is terracotta. Filters, colours, sizes and
+   the solid buttons all read the same way, so the accent means "this is the
+   one" rather than decorating whatever happens to be nearby. */
+.chip:hover { border-color: var(--terra); color: var(--terra); }
+.chip.on { background: var(--terra); color: var(--bone); border-color: var(--terra); }
 
 .grid {
   display: grid;
@@ -705,8 +719,8 @@ a { color: inherit; text-decoration: none; }
   font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
   transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
 }
-.size:hover { border-color: var(--ink); }
-.size.on { background: var(--ink); color: var(--bone); border-color: var(--ink); }
+.size:hover { border-color: var(--terra); color: var(--terra); }
+.size.on { background: var(--terra); color: var(--bone); border-color: var(--terra); }
 
 .swatches { display: flex; gap: 7px; flex-wrap: wrap; }
 .swatch {
@@ -717,8 +731,8 @@ a { color: inherit; text-decoration: none; }
   transition: border-color 0.4s var(--ease), background 0.4s var(--ease), color 0.4s var(--ease);
 }
 .swatch i { width: 13px; height: 13px; border-radius: 999px; border: 1px solid var(--ink-14); }
-.swatch:hover { border-color: var(--ink); }
-.swatch.on { background: var(--ink); color: var(--bone); border-color: var(--ink); }
+.swatch:hover { border-color: var(--terra); color: var(--terra); }
+.swatch.on { background: var(--terra); color: var(--bone); border-color: var(--terra); }
 .size:disabled, .swatch:disabled { opacity: 0.3; cursor: not-allowed; text-decoration: line-through; }
 
 .spec { display: flex; gap: 14px; padding-block: 11px; border-top: 1px solid var(--ink-07); }
@@ -735,7 +749,9 @@ a { color: inherit; text-decoration: none; }
   color: var(--ink);
   overflow-y: auto;
   overflow-x: hidden;
-  overscroll-behavior: contain;
+  /* none so a horizontal flick that reaches this layer cannot become a
+     browser back-swipe either */
+  overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
   opacity: 0;
   visibility: hidden;
@@ -778,8 +794,8 @@ a { color: inherit; text-decoration: none; }
 .pdp-media { min-width: 0; }
 .pdp-gallery { display: flex; flex-direction: column; gap: clamp(10px, 1.4vw, 20px); min-width: 0; }
 .pdp-shot { position: relative; margin: 0; aspect-ratio: 4 / 5; }
-/* dots belong to the swipeable phone gallery; the column needs no index */
-.pdp-dots { display: none; }
+/* the marks belong to the swipeable phone gallery; the column needs no index */
+.pdp-marks { display: none; }
 .pdp-shot img { width: 100%; height: 100%; object-fit: cover; }
 .pdp-num {
   position: absolute; left: 14px; bottom: 12px;
@@ -858,7 +874,11 @@ a { color: inherit; text-decoration: none; }
     gap: 0;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
-    overscroll-behavior-x: contain;
+    /* none, not contain: contain stops the scroll chaining to the page but
+       still leaves the gesture to the browser at the edge, and a swipe right
+       on the first shot was triggering back-navigation — the whole site
+       unloaded. none takes the edge gesture too. */
+    overscroll-behavior-x: none;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -871,19 +891,31 @@ a { color: inherit; text-decoration: none; }
   }
   .pdp-num { display: none; }
 
-  .pdp-dots {
-    display: flex; justify-content: center; gap: 7px;
+  /* The photo drifts against the swipe and the outgoing one dims, so the
+     shots feel stacked in depth instead of sliding as one strip. --d is the
+     cell's distance from the viewport in widths, written by the scroll
+     handler; at rest it is 0 and nothing is displaced. */
+  .pdp-shot img {
+    /* --d is signed distance in widths, --ad its magnitude; both are written
+       by the scroll handler and default to 0, so at rest this is identity.
+       scale(1.12) gives the drift room to move without baring an edge. */
+    transform: translate3d(calc(var(--d, 0) * -16%), 0, 0) scale(1.12);
+    opacity: calc(1 - var(--ad, 0) * 0.5);
+    transition: none;
+    will-change: transform, opacity;
+  }
+
+  .pdp-marks {
+    display: flex; justify-content: center; align-items: baseline; gap: 18px;
     padding-top: 14px;
   }
-  /* the global button reset clears the border but not the UA padding, which
-     would stretch a 7px square into a pill */
-  .pdp-dot {
-    width: 7px; height: 7px; padding: 0; flex: none;
-    border-radius: 999px;
-    background: var(--ink-14);
-    transition: background 0.35s var(--ease), transform 0.35s var(--ease);
+  .pdp-mark-n {
+    padding: 4px 2px;
+    color: var(--ink-14);
+    border-bottom: 1px solid transparent;
+    transition: color 0.35s var(--ease), border-color 0.35s var(--ease);
   }
-  .pdp-dot.on { background: var(--terra); transform: scale(1.35); }
+  .pdp-mark-n.on { color: var(--terra); border-bottom-color: var(--terra); }
   .pdp-buy { position: static; padding-inline: var(--pad); }
   /* clear the dock so the last spec isn't trapped under it */
   .pdp-more { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
@@ -1165,8 +1197,16 @@ a { color: inherit; text-decoration: none; }
   align-items: stretch;
 }
 
+/* align-self: start keeps the plate sized by its own aspect-ratio instead of
+   being stretched by the row. Stretched, its height comes from the grid, and
+   Safari then refuses to resolve height: 100% on .rv-curtain inside it — the
+   curtain collapses to zero and the clip-path reveal paints nothing, so the
+   shot never appears. Chrome resolves it either way, which is why this only
+   shows up on a phone. The index still stretches; the plate still sets the
+   row height. */
 .feed-stage {
   position: relative;
+  align-self: start;
   aspect-ratio: 4 / 5;
   overflow: hidden;
   background: var(--sand);
