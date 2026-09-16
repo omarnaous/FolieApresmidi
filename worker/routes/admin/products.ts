@@ -13,6 +13,7 @@ import {
 import { toMajorString } from '../../../shared/money';
 import { parseJson } from '../../db/client';
 import { enqueue } from '../../jobs/messages';
+import { imagesBinding, mediaBucket, requireMediaBucket } from '../../lib/bindings';
 import { purgeProducts } from '../../lib/cache';
 import { csvLine } from '../../lib/csv';
 import { AppError, constraintName, invalid, notFound } from '../../lib/errors';
@@ -169,7 +170,7 @@ adminProducts.post('/products/import', staffOnly('products:write'), async (c) =>
   const now = Date.now();
   const id = ulid(now);
   const key = `imports/${id}.csv`;
-  await c.env.MEDIA.put(key, text, { httpMetadata: { contentType: 'text/csv' } });
+  await requireMediaBucket(c.env).put(key, text, { httpMetadata: { contentType: 'text/csv' } });
   await c.env.DB.prepare(`INSERT INTO csv_imports (id, staff_id, r2_key, status, summary_json, errors_json, created_at, finished_at) VALUES (?, ?, ?, 'queued', NULL, '[]', ?, NULL)`)
     .bind(id, staff.id, key, now)
     .run();
@@ -313,6 +314,7 @@ adminProducts.post('/media', staffOnly('products:write'), async (c) => {
   if (files.length === 0) throw invalid({ files: 'Choose at least one image' });
   if (files.length > MAX_UPLOAD_FILES) throw invalid({ files: `Upload at most ${MAX_UPLOAD_FILES} images at a time` });
 
+  const bucket = requireMediaBucket(c.env);
   const items: MediaDTO[] = [];
   for (const [i, file] of files.entries()) {
     if (file.size > MAX_UPLOAD_BYTES) throw invalid({ [`files.${i}`]: `${file.name} is larger than 10 MB` });
@@ -323,7 +325,7 @@ adminProducts.post('/media', staffOnly('products:write'), async (c) => {
     let width: number | null = null;
     let height: number | null = null;
     try {
-      const info = await c.env.IMAGES.info(new Blob([bytes]).stream());
+      const info = await imagesBinding(c.env)!.info(new Blob([bytes]).stream());
       if ('width' in info) {
         width = info.width;
         height = info.height;
@@ -335,7 +337,7 @@ adminProducts.post('/media', staffOnly('products:write'), async (c) => {
     const now = Date.now();
     const id = ulid(now);
     const key = `products/${new Date(now).getUTCFullYear()}/${id.toLowerCase()}.${kind.ext}`;
-    await c.env.MEDIA.put(key, bytes, { httpMetadata: { contentType: kind.mime, cacheControl: 'public, max-age=31536000, immutable' } });
+    await bucket.put(key, bytes, { httpMetadata: { contentType: kind.mime, cacheControl: 'public, max-age=31536000, immutable' } });
     const alt = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').slice(0, 120);
     await c.env.DB.prepare('INSERT INTO media (id, r2_key, source_url, mime, bytes, width, height, alt, created_by, created_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)')
       .bind(id, key, kind.mime, bytes.byteLength, width, height, alt, staff.id, now)
@@ -369,7 +371,7 @@ adminProducts.delete('/media/:id', staffOnly('products:write'), async (c) => {
     d1.prepare('UPDATE store_settings SET logo_media_id = NULL WHERE logo_media_id = ?').bind(id),
     d1.prepare('DELETE FROM media WHERE id = ?').bind(id),
   ]);
-  await c.env.MEDIA.delete(m.r2_key);
+  await mediaBucket(c.env)?.delete(m.r2_key);
   purgeProducts(c.executionCtx, results.map((r) => r.product_id));
   await audit(c, 'media.deleted', 'media', id, 'Deleted an image');
   return c.body(null, 204);

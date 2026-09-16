@@ -1,3 +1,5 @@
+import { jobQueue } from '../lib/bindings';
+
 /** Everything that goes through the JOBS queue. Payloads are small and JSON-safe. */
 export type JobMessage =
   | { type: 'email.order_confirmation'; orderId: string }
@@ -11,5 +13,14 @@ export type JobMessage =
   | { type: 'csv.import'; importId: string };
 
 export async function enqueue(env: Env, message: JobMessage): Promise<void> {
-  await env.JOBS.send(message, { contentType: 'json' });
+  const queue = jobQueue(env);
+  if (queue) {
+    await queue.send(message, { contentType: 'json' });
+    return;
+  }
+  // No Queues binding (the free-plan preview environment): run the job on this
+  // request instead of dropping it. Imported lazily to keep the cycle between
+  // this module and the consumer out of the module graph's eager phase.
+  const { runJob } = await import('./queue');
+  await runJob(env, message, `inline:${crypto.randomUUID()}`);
 }

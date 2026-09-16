@@ -1,17 +1,47 @@
 # Deploying
 
 One Worker serves the storefront, the admin, the API and the images. There are
-three environments in `wrangler.jsonc`:
+four environments in `wrangler.jsonc`:
 
 | Environment | Worker | Config | Used for |
 |---|---|---|---|
 | development | — | top level | `npm run dev:worker`; everything simulated on disk |
+| preview | `fdm-preview` | `env.preview` | a throwaway shop on the **free plan** (see §0) |
 | staging | `fdm-staging` | `env.staging` | a real copy to try changes on |
 | production | `fdm` | `env.production` | the shop |
 
 Bindings are never inherited by a named environment, so each one lists its own
 D1, KV, R2, Queues and rate limiters. Run every command with Node ≥ 22
 (`nvm use 22`).
+
+---
+
+## 0. The free-plan preview
+
+`env.preview` exists to click through the shop before the account has R2 or a
+paid plan. It binds only what the free plan gives you — D1, KV, rate limiting,
+cron — and the Worker notices the rest is missing and degrades:
+
+| Missing | What happens instead | What you lose |
+|---|---|---|
+| R2 (`MEDIA`) | `/media/<key>` streams from the image's `source_url` | admin image upload and CSV import answer "File storage (R2) is not enabled" |
+| Queues (`JOBS`) | `enqueue()` runs the job inline on the request | emails and collection rebuilds add latency to the request that triggered them |
+| Images (`IMAGES`) | `?w=` returns the original | no WebP resizing, so pages pull full-size images |
+
+It also hashes passwords at 10,000 PBKDF2 rounds instead of 100,000, because
+the free plan gives a request 10 ms of CPU and the full count does not fit.
+**This is a preview-only weakening** — staging and production hash at full
+strength. Do not point a real shop at this environment.
+
+```bash
+npx wrangler secret put PASSWORD_PEPPER --env preview   # and COOKIE_SECRET, SETUP_TOKEN
+npm run deploy:preview      # typecheck → tests → build → migrate → deploy
+npm run db:seed:preview     # 54 demo products, discount codes, a test owner
+```
+
+The seeded accounts only work if `PASSWORD_PEPPER` and `PASSWORD_ITERATIONS`
+match the `.dev.vars` the seed was built from — `db:seed:preview` rebuilds it,
+so set `.dev.vars` first.
 
 ---
 

@@ -16,8 +16,11 @@
     "db:migrate": "wrangler d1 migrations apply DB --local",
     "db:seed": "node scripts/build-seed.mjs && wrangler d1 execute DB --local --file=seed/catalog.sql && wrangler d1 execute DB --local --file=seed/dev.sql",
     "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate && npm run db:seed",
+    "db:migrate:preview": "wrangler d1 migrations apply DB --remote --env preview",
+    "db:seed:preview": "node scripts/build-seed.mjs && wrangler d1 execute DB --remote --env preview --file=seed/catalog.sql && wrangler d1 execute DB --remote --env preview --file=seed/dev.sql",
     "db:migrate:staging": "wrangler d1 migrations apply DB --remote --env staging",
     "db:migrate:prod": "wrangler d1 migrations apply DB --remote --env production",
+    "deploy:preview": "npm run typecheck && npm test && npm run build && wrangler d1 migrations apply DB --remote --env preview && wrangler deploy --env preview",
     "deploy:staging": "npm run typecheck && npm test && npm run build && wrangler d1 migrations apply DB --remote --env staging && wrangler deploy --env staging",
     "deploy:prod": "npm run typecheck && npm test && npm run build && wrangler d1 migrations apply DB --remote --env production && wrangler deploy --env production"
   },

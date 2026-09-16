@@ -73,6 +73,43 @@
   "triggers": { "crons": ["*/5 * * * *", "0 * * * *", "30 3 * * *"] },
 
   "env": {
+    // A throwaway environment that fits inside the Workers free plan, for
+    // clicking through the shop before the account has R2 or a paid plan.
+    // No R2, no Queues, no Images binding — the Worker degrades on its own:
+    // jobs run inline on the request, media streams from its source URL, and
+    // admin image uploads answer 503. Everything else is the real thing.
+    "preview": {
+      "name": "fdm-preview",
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "APP_ENV": "staging",
+        "APP_URL": "https://fdm-preview.follies.workers.dev",
+        "ALLOWED_ORIGINS": "https://fdm-preview.follies.workers.dev",
+        "EMAIL_FROM": "Follies d'Après-Midi <orders@example.com>",
+        // The free plan gives a request 10 ms of CPU, and 100,000 PBKDF2
+        // rounds do not fit. Preview only — staging and production hash at
+        // full strength.
+        "PASSWORD_ITERATIONS": "10000"
+      },
+      "secrets": { "required": ["PASSWORD_PEPPER", "COOKIE_SECRET", "SETUP_TOKEN", "RESEND_API_KEY"] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "fdm-preview",
+          "database_id": "f5e41b0e-b5f1-43ed-9f4c-f023ca571e44",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "kv_namespaces": [{ "binding": "KV", "id": "8042fc09a84d4b59b78ea6f78d81793f" }],
+      "ratelimits": [
+        { "name": "RL_AUTH", "namespace_id": "4001", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_CHECKOUT", "namespace_id": "4002", "simple": { "limit": 30, "period": 60 } },
+        { "name": "RL_API", "namespace_id": "4003", "simple": { "limit": 600, "period": 60 } }
+      ],
+      "triggers": { "crons": ["0 * * * *", "30 3 * * *"] }
+    },
+
     "staging": {
       "name": "fdm-staging",
       "workers_dev": true,
