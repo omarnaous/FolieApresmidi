@@ -1,34 +1,61 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { imageSrc } from '../../shared/api';
 import { CRITICAL } from '../data/assets';
+import { homeGridQuery, useProductList } from '../lib/queries';
 
 const MIN_MS = 1500;
+/** How long the door waits on the catalogue before it stops counting it. */
+const API_MS = 1800;
+/** First shots of the home grid, warmed once the catalogue answers. */
+const WARM = 2;
+
+const load = (srcs, tick) => {
+  srcs.forEach((src) => {
+    const img = new Image();
+    img.onload = tick;
+    img.onerror = tick;
+    img.src = src;
+  });
+};
 
 export default function Preloader({ onDone }) {
-  const [pct, setPct] = useState(0);
+  const [loaded, setLoaded] = useState(0);
+  const [bailed, setBailed] = useState(false);
+  // null while the catalogue has not answered; [] once it failed or was too slow
+  const [warm, setWarm] = useState(null);
   const [done, setDone] = useState(false);
   const started = useRef(Date.now());
+  // the grid's own request, so this warms the cache rather than racing it
+  const { data, isError } = useProductList(homeGridQuery(null));
 
   useEffect(() => {
-    let loaded = 0;
     let cancelled = false;
-    const total = CRITICAL.length;
-
-    const tick = () => {
-      loaded += 1;
-      if (!cancelled) setPct(Math.round((loaded / total) * 100));
-    };
-
-    CRITICAL.forEach((src) => {
-      const img = new Image();
-      img.onload = tick;
-      img.onerror = tick;
-      img.src = src;
-    });
+    load(CRITICAL, () => !cancelled && setLoaded((n) => n + 1));
 
     // never hold the door longer than 4s, whatever the network does
-    const bail = setTimeout(() => !cancelled && setPct(100), 4000);
-    return () => { cancelled = true; clearTimeout(bail); };
+    const bail = setTimeout(() => !cancelled && setBailed(true), 4000);
+    const giveUp = setTimeout(() => setWarm((w) => w ?? []), API_MS);
+    return () => { cancelled = true; clearTimeout(bail); clearTimeout(giveUp); };
   }, []);
+
+  useEffect(() => {
+    if (warm !== null) return;
+    if (data) {
+      setWarm(data.items.slice(0, WARM).flatMap((p) => (p.images[0] ? [imageSrc(p.images[0], 640)] : [])));
+    } else if (isError) {
+      setWarm([]);
+    }
+  }, [data, isError, warm]);
+
+  useEffect(() => {
+    if (!warm?.length) return;
+    let cancelled = false;
+    load(warm, () => !cancelled && setLoaded((n) => n + 1));
+    return () => { cancelled = true; };
+  }, [warm]);
+
+  const total = CRITICAL.length + (warm === null ? WARM : warm.length);
+  const pct = bailed ? 100 : Math.min(100, Math.round((loaded / total) * 100));
 
   useEffect(() => {
     if (pct < 100) return;

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { useCart } from '../store/cart';
 import { SECTIONS } from '../data/sections';
 
@@ -37,6 +38,9 @@ export default function Nav({ onMenu, menuOpen, onSearch }) {
         <button className="label link-u" onClick={onSearch} aria-label="Search all pieces">
           Search
         </button>
+        <Link className="label link-u nav-account" to="/account">
+          Account
+        </Link>
         <button className="label link-u" onClick={openCart} aria-label="Open bag">
           <span className="nav-cart">
             Bag

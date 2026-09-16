@@ -1,26 +1,76 @@
 # FOLLIES D'APRÈS MIDI
 
-A minimal luxury storefront for FDM — React + Vite, with a **Remotion** title
-film as the hero. Épicée. Libre.
-
-The catalogue is the real one: **54 products** pulled from the live Shopify
-store, with its own prices, sizes, colours, descriptions and photography.
-
-**Live:** https://omarnaous.github.io/FolieApresmidi/
+A luxury storefront and the shop behind it — React + Vite on the front, a
+Cloudflare Worker on the back, one deploy. Épicée. Libre.
 
 ```bash
+nvm use 22            # wrangler and react-router need Node ≥ 22
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # → dist/
-npm run catalogue  # re-pull the 54 products from the live store
-npm run deploy     # build + publish to GitHub Pages
+npm run db:reset      # migrate + seed the local database (54 real pieces)
+npm run dev:worker    # API, images, SEO routes  → http://localhost:8787
+npm run dev           # the site                 → http://localhost:5173
 ```
 
-The home page shows **10 pieces**; the full 54 live behind *Search* in the nav
-or *See all pieces* under the grid — a full-screen catalogue with search, the
-store's categories, and sorting.
+Open <http://localhost:5173>. Vite forwards `/api`, `/media/products`,
+`/sitemap.xml` and `/robots.txt` to the Worker, so the browser sees one origin —
+the same shape as production, where one Worker serves everything.
+
+The seed prints local sign-ins: an admin owner for `/admin` and a customer for
+the storefront, plus the discount codes `WELCOME10`, `TWENTYOFF`, `FREESHIP`
+and `JEWELLERY3FOR2`.
+
+| Command | What it does |
+|---|---|
+| `npm run dev` / `npm run dev:worker` | the two development servers |
+| `npm test` | unit + integration tests, inside workerd |
+| `npm run typecheck` | strict TypeScript, worker and web |
+| `npm run db:generate` | schema change → new SQL migration |
+| `npm run db:migrate` / `db:seed` / `db:reset` | local database |
+| `npm run types` | regenerate `worker-configuration.d.ts` after a binding change |
+| `npm run deploy:staging` / `deploy:prod` | typecheck, test, build, migrate, deploy |
 
 ---
+
+## What it is
+
+A shop of Shopify's shape, on Cloudflare's runtime.
+
+- **Storefront** — catalogue with full-text search, filters and facets; product
+  pages with variants and live stock; a persistent bag; a three-step checkout;
+  customer accounts with orders, addresses and a wishlist.
+- **Admin** (`/admin`) — dashboard, products and inventory, collections
+  (manual and rule-based), orders with fulfilment and refunds, customers,
+  discounts, shipping, taxes, pages, staff with roles, and an audit log.
+- **Payment** — cash on delivery, behind a provider interface that a gateway
+  can be dropped into without touching business logic.
+- **Jobs** — transactional email, abandoned-cart reminders, CSV imports and
+  housekeeping, on queues and cron.
+
+The architecture, the schema and the decisions behind them are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Deploying is
+[docs/DEPLOY.md](docs/DEPLOY.md).
+
+## Structure
+
+```
+worker/           the Worker — Hono
+  app.ts            routes and middleware order
+  routes/           store · cart · checkout · auth · account · admin/* · webhooks · seo · media
+  services/         catalog · cart · checkout · orders · inventory · collections · admin-products …
+  domain/           pure rules: pricing · discounts · tax · shipping · order-state · math
+  payments/         provider interface · registry · cod
+  jobs/             queue consumer · cron · csv import
+  db/               drizzle schema + client
+  lib/              crypto · errors · cache · sanitize · csv · images · ids
+shared/           the API contract: Zod inputs, DTO types, route map
+src/              the site — existing components untouched in look, now fed by the API
+  admin/            the admin app (lazy-loaded chunk, styles scoped under .adm)
+  account/ checkout/ content/   sheets that match the storefront's design system
+  remotion/         the hero film
+migrations/       numbered SQL, applied by wrangler
+seed/             generated SQL (catalogue, and local-only demo data)
+test/             unit + integration, run inside the Workers runtime
+```
 
 ## The hero film
 
@@ -47,21 +97,14 @@ film re-cuts itself.
 640px. Run full-screen that's a 2× upscale and it shows; framed at 30–45% of the
 frame each plate lands near 1:1, and the contact sheet is sharper still. It also
 reads better — a lookbook spread rather than a slideshow. Only the finale goes
-full-bleed, under 58% ink so the softness reads as grain. If you have the
-originals, drop them into `public/media/ig/` under the same names and the plates
-can be widened in `Epicee` / `Libre`.
+full-bleed, under 58% ink so the softness reads as grain.
 
 It ends on black so the loop seam is invisible. 30 fps, 760 frames ≈ 25s.
-
-**Re-cutting it.** Timings live in the `ACTS` object at the top of the file;
-`Wipe` markers sit at the bottom of `<HeroFilm>`. The building blocks —
+Timings live in the `ACTS` object at the top of the file; the building blocks —
 `Plate`, `Rise`, `RiseChars`, `Wipe`, `Grain`, `Label` — are in
-`src/remotion/atoms.jsx`.
-
-**Format.** `Hero.jsx` cuts the composition to the viewport's own aspect ratio
-and every measurement inside the film is relative to `useVideoConfig()`, so the
-film reflows for 21:9 desktop or 9:16 phone instead of being letterboxed or
-cropped. Type stays a constant percentage of viewport width.
+`src/remotion/atoms.jsx`. `Hero.jsx` cuts the composition to the viewport's own
+aspect ratio, so the film reflows for 21:9 desktop or 9:16 phone instead of
+being letterboxed.
 
 **Rendering it to MP4** (for Instagram, or as a `<video>` fallback):
 
@@ -70,89 +113,56 @@ npm i -D @remotion/cli
 npx remotion render src/remotion/HeroFilm.jsx HeroFilm out/reel.mp4
 ```
 
----
-
 ## The catalogue
 
-`src/data/products.js` is **generated — don't hand-edit it.** Run
-`npm run catalogue` to refresh from `folliesdapresmidi.com/products.json`
-(`scripts/pull-catalogue.mjs`). It reads the product feed plus each collection
-feed, and writes out:
+The catalogue lives in D1 and is edited in `/admin`. The seed fills it with the
+real 54 pieces — names, prices, sizes, colours, descriptions and photography
+pulled from the live Shopify store (`scripts/seed-data/shopify-products.js`,
+turned into SQL by `scripts/build-seed.mjs`).
 
-```js
-{ id, name, line, price, images[], sizes[], colours[], variants[], note, drop, available, url }
-```
+Two things the seed cannot know, both flagged in the admin:
 
-- **`line`** comes from the store's own collections (Bottoms, Tops, Dresses,
-  Co-ords, Bralettes, Jackets, Overalls, Necklaces, Earrings, Bracelets).
-- **`variants`** keep `{ id, size, colour, price, available }` — `id` is the real
-  Shopify variant id, which is all a checkout permalink needs. The quick view can
-  grey out a combination the store doesn't stock. Pieces sold as a single
-  "Default Title" variant are listed as **One size** — which is how they're sold.
-- **`drop`** marks the 14 pieces in *Échappée 4 à 7*; they sort to the front and
-  carry the badge.
-- **`note`** is the store's own description. Five pieces have none, and the panel
-  simply omits the paragraph rather than inventing one.
+- **Stock** — the store publishes availability, not counts. Seeded pieces get 6
+  units where the store sells them and 0 where it does not. Set the real
+  quantities in Admin → Products.
+- **Delivery** — a Lebanon zone with a placeholder rate of 0. Set the real fee
+  in Admin → Shipping. A VAT rate of 11% is prepared but inactive under Taxes;
+  turn it on only if the store charges it.
 
-Nothing in the UI states a fact the store doesn't. The exchange terms in the
-quick view are their published policy (24 hours, exchange only, no refunds); the
-house copy is from their About page. There are no invented care instructions,
-fabric claims or shipping promises — if you add any, they need to be true.
+Nothing else is invented. The exchange policy page is the store's published
+terms, and product copy is the store's own.
 
 ### Imagery
-Product photography is served from the store's own Shopify CDN, which resizes on
-request (`?width=1400`). Nothing is copied into the repo, so new shots appear as
-soon as the store updates. To go fully self-hosted, download each `images[]` URL
-into `public/media/` and rewrite the paths in the generator.
 
-The shots are ghost-mannequin on pure white, so `.packshot` in `styles.css`
-multiplies them over a paper-coloured tile — the garment floats on the page
-instead of sitting in a bright rectangle. Swap that one rule if the shooting
-style ever changes.
+Product photographs stay on the store's CDN until they are first requested:
+each `media` row keeps its `source_url`, and `/media/products/…` copies the file
+into R2 on first view, then serves it from there for good. Uploads through the
+admin go straight to R2. Either way the Worker resizes on request
+(`/media/<key>?w=640`, widths 320–2000) to WebP and caches the result at the
+edge.
 
-### The feed frames
-`public/media/ig/` holds ten frames from @folliesdapresmidi — 392 KB all in —
-with their real post dates, shortcodes and a short descriptive label recorded in
-`FEED`. These are files, not hotlinks: Instagram signs its CDN URLs and they
-expire within days. To refresh, pull new frames and update `FEED`; the film and
-the house section both read whatever is in that array.
+The Instagram frames in `public/media/ig/` are static files, not R2 — they are
+brand content, and the film reads them directly.
 
-They do double duty: the film uses them as plates, `Feed.jsx` uses them as the
-house section's index, and the mobile menu shows the first three. Every one links
-back to the post it came from via `post(code)`.
+## How the money works
 
-## Structure
+- **Every amount is an integer in minor units.** No floats anywhere: `$145` is
+  `14500`. `shared/money.ts` parses and formats at the edges.
+- **Totals are computed on the server, only in `worker/domain/pricing.ts`.**
+  The browser sends variant ids and quantities; prices, discounts, shipping and
+  tax come from the database. A tampered request cannot set a price.
+- **Stock is committed in one atomic batch.** `variants_stock` is a CHECK
+  constraint, so a decrement that would go negative aborts the whole D1
+  transaction — two shoppers racing for the last piece can never both win.
+  Discount usage limits are guarded the same way.
+- **Checkout holds stock for 15 minutes** (configurable) so a shopper filling in
+  an address does not lose the piece to someone still browsing. Holds never
+  change `on_hand`; only a placed order does.
+- **Cash on delivery commits stock when the order is placed** — there is no
+  webhook to wait for — and stays `unpaid` until staff record the cash. A
+  gateway added later commits stock when its verified webhook confirms payment.
 
-```
-src/
-  remotion/     HeroFilm.jsx — the film    ·  atoms.jsx — its primitives
-  components/   one file per section, plus Cursor / Preloader / drawers
-  store/        cart.jsx — context + reducer, persisted to localStorage
-  data/         assets.js (all imagery)    ·  products.js (catalogue, pop-ups)
-  hooks/        useInView.js
-  styles.css    design system: pigments, type scale, plate, reveals
-```
-
-### The house section
-`Feed.jsx` is an index, not an essay — hover or tap a line and the plate changes;
-the plate links out to the post. It reads the first six of `FEED`, so it stays
-current with whatever is in that array.
-
-### Quick view
-One strip of shots serves both layouts: the wide panel lays out only the
-selected one (thumbnails switch it, clicking the plate cycles), while a phone
-lays out all of them and you swipe — the next shot peeks in at 76% width so the
-gesture is discoverable. The piece is the first thing on screen either way.
-
-### Catalogue and search
-`Shop.jsx` renders the first `HOME_LIMIT` (10) of the active category and hands
-off to `Catalogue.jsx` — a full-screen panel with search, category chips and
-sorting. Search matches every typed word against the piece's name, category,
-colours, sizes **and** the store's own description, so "brown", "lace" or "rouge"
-all find things. Opening a piece from the catalogue layers the quick view above
-it; closing the quick view leaves the catalogue where it was.
-
-### Notes for whoever works on this next
+## Notes for whoever works on this next
 
 - **Reveal masks clip an inner `.rv-curtain`, never the observed element.**
   An element clipped to zero height reports `intersectionRatio: 0`, so a
@@ -160,6 +170,7 @@ it; closing the quick view leaves the catalogue where it was.
   padding plus equal negative margin — a tight clip eats accents (É) and descenders.
 - **One place decides whether the page may scroll** — the `locked` flag in
   `App.jsx`, which drives both `body.is-locked` and Lenis `stop()`/`start()`.
+  It now follows the route: any sheet or drawer open means locked.
 - **Motion is off** under `prefers-reduced-motion`: Lenis never starts and every
   reveal renders in its final state.
 - **Packshot blending needs a backdrop of its own.** `mix-blend-mode` is trapped
@@ -169,104 +180,8 @@ it; closing the quick view leaves the catalogue where it was.
   ragged rows. They deliberately carry no `scroll-snap`: `snap-align: start`
   ignores the container's padding and would shove the first chip flush against
   the screen edge, out of line with the heading above it.
-
----
-
-## Deploying
-
-GitHub Pages serves this repo from the **gh-pages** branch root, and
-`npm run deploy` is the whole pipeline: build, replace that branch's contents
-with `dist/`, push. It runs in a throwaway worktree, so your working tree is
-never touched.
-
-Two things that matter for a project page (served from `/FolieApresmidi/`,
-not a domain root):
-
-- `vite.config.js` sets `base` to that subpath **for builds only**, so dev stays
-  on `/`.
-- Vite rewrites asset URLs it can see — imports, CSS `url()`, `index.html` — but
-  **not plain strings**. The frames in `src/data/assets.js` are hand-written
-  paths, so they are built off `import.meta.env.BASE_URL`. Add any new
-  `public/` path the same way or it will 404 in production while working fine
-  locally.
-
-Renaming the repo means changing `base` and rebuilding.
-
-There is no Actions workflow: pushing `.github/workflows/` needs a token with
-the `workflow` scope, and the CLI is authorised for `repo` only. If you add that
-scope (`gh auth refresh -s workflow`), a standard `actions/deploy-pages` job can
-replace the script.
-
-## Wiring it up for real
-
-The storefront is complete but deliberately headless — three seams to connect:
-
-| Seam | Where | What to do |
-|---|---|---|
-| Checkout | `CartDrawer.jsx`, the Checkout button | The store is already Shopify and each variant carries its real `id`, so checkout is a permalink: `folliesdapresmidi.com/cart/{variantId}:{qty},…`. Carry the chosen variant's id onto the cart line and redirect |
-| Catalogue | `data/products.js` | Already the real store. For live stock, swap the generated array for a Storefront API fetch — same shape |
-| Newsletter | `Newsletter.jsx`, `submit()` | Point at Klaviyo/Mailchimp; the optimistic UI is already there |
-
-Prices are plain numbers in USD, matching the store (`money()` in
-`store/cart.jsx`) — swap that one helper for `Intl.NumberFormat` if you ever need
-LBP or multi-currency.
-
-## Cloudflare — hosting and the backend
-
-One Worker serves the built site and the API from the same origin, so there
-is no CORS and no second domain. Orders and sign-ups go to D1.
-
-```
-POST /api/order      place an order   -> orders
-POST /api/subscribe  newsletter       -> subscribers
-GET  /api/orders     read them back   (Authorization: Bearer $ADMIN_KEY)
-GET  /api/health     liveness
-```
-
-**Prices are never taken from the client.** The browser sends product ids and
-quantities; `worker/index.js` prices the basket from `worker/catalogue.js`,
-which `npm run catalogue` regenerates alongside `src/data/products.js`. A
-tampered request buying a $145 dress for $1 is charged $145.
-
-### First deploy
-
-The D1 database already exists (`fdm-store`,
-`ecba53f7-e059-45d2-90e7-c040b0e294f2`) with its schema applied.
-
-```bash
-npx wrangler login                                   # once, in a browser
-npx wrangler secret put ADMIN_KEY                    # any long random string
-npm run cf:deploy                                    # build + deploy
-```
-
-Or connect the repo under **Workers & Pages → Create → Connect to Git** and
-let every push to `main` deploy. Build command `npm run build`, no output
-directory needed — `wrangler.jsonc` points at `dist/`.
-
-### Locally
-
-```bash
-npm run worker      # miniflare + a local D1, no Cloudflare account needed
-```
-
-`.dev.vars` holds `ADMIN_KEY` for local runs and is gitignored. Apply the
-schema to the local database once:
-
-```bash
-npx wrangler d1 execute fdm-store --local --file=worker/schema.sql
-```
-
-### Reading orders
-
-```bash
-curl -H "authorization: Bearer $ADMIN_KEY" https://<your-worker>/api/orders
-```
-
-### GitHub Pages still works
-
-`npm run deploy` publishes to `gh-pages` as before — it sets
-`SITE_BASE=/FolieApresmidi/`, because a project page is served from a
-subpath while the Worker is served from the root. That copy has no API
-behind it: `src/lib/api.js` notices `/api/*` did not return JSON and the
-checkout and newsletter fall back to composing a mail, so an order is never
-silently lost.
+- **Admin styles are scoped under `.adm`** and the admin never imports
+  storefront components; the storefront never imports admin ones. That is what
+  keeps the admin out of the shopper's bundle.
+- **`shared/api.ts` is the contract.** Change it first, then the Worker, then
+  the screens — the route map at the bottom of that file is the index.

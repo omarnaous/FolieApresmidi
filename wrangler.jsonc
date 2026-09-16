@@ -1,26 +1,144 @@
 {
-  // Follies d'Après-Midi — one Worker serves the built site and the API.
-  // Deploy:  npx wrangler deploy      (after `npm run build`)
-  // Local :  npm run worker           (miniflare, local D1, no account needed)
+  // Follies d'Après-Midi — one Worker serves the storefront, the admin, the API
+  // and the image pipeline.
+  //
+  //   local       npm run dev             top level below; D1/KV/R2/Queues simulated on disk
+  //   staging     npm run deploy:staging  env.staging
+  //   production  npm run deploy:prod     env.production
+  //
+  // Secrets never live here: see .dev.vars.example and docs/DEPLOY.md.
+  // Bindings, vars and secrets are NOT inherited by named environments, so
+  // each environment below repeats them in full.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "fdm",
-  "main": "worker/index.js",
-  "compatibility_date": "2026-09-01",
+  "name": "fdm-dev",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+
   "assets": {
-    // the Vite build; the Worker only sees a request the site has no file for
     "directory": "./dist",
     "binding": "ASSETS",
-    // it is a single-page site: unknown paths render index.html, not a 404
+    // a single-page app: unknown paths render index.html
     "not_found_handling": "single-page-application",
-    // /api/* must always reach the Worker, never be answered by a file
-    "run_worker_first": ["/api/*"]
+    // paths the Worker answers before any static file
+    "run_worker_first": [
+      "/api/*",
+      "/media/*",
+      "/products/*",
+      "/collections/*",
+      "/pages/*",
+      "/cart/recover/*",
+      "/sitemap.xml",
+      "/robots.txt"
+    ]
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "fdm-store",
-      "database_id": "ecba53f7-e059-45d2-90e7-c040b0e294f2"
-    }
+
+  // Workers Cache: public catalog responses are cached by their Cache-Control
+  // and purged by Cache-Tag on every catalog write. Personal responses are
+  // always `private, no-store`.
+  "cache": { "enabled": true },
+
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  },
+
+  "vars": {
+    "APP_ENV": "development",
+    "APP_URL": "http://localhost:5173",
+    "ALLOWED_ORIGINS": "http://localhost:5173,http://localhost:8787",
+    "EMAIL_FROM": "Follies d'Après-Midi <orders@localhost>",
+    "PASSWORD_ITERATIONS": "100000"
+  },
+  "secrets": { "required": ["PASSWORD_PEPPER", "COOKIE_SECRET", "SETUP_TOKEN", "RESEND_API_KEY"] },
+
+  "d1_databases": [{ "binding": "DB", "database_name": "fdm-dev", "migrations_dir": "migrations" }],
+  "kv_namespaces": [{ "binding": "KV" }],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "fdm-media-dev" }],
+  "images": { "binding": "IMAGES" },
+  "queues": {
+    "producers": [{ "binding": "JOBS", "queue": "fdm-jobs-dev" }],
+    "consumers": [
+      { "queue": "fdm-jobs-dev", "max_batch_size": 10, "max_batch_timeout": 2, "max_retries": 5, "dead_letter_queue": "fdm-jobs-dlq-dev" }
+    ]
+  },
+  "ratelimits": [
+    { "name": "RL_AUTH", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+    { "name": "RL_CHECKOUT", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } },
+    { "name": "RL_API", "namespace_id": "1003", "simple": { "limit": 600, "period": 60 } }
   ],
-  "observability": { "enabled": true }
+  "triggers": { "crons": ["*/5 * * * *", "0 * * * *", "30 3 * * *"] },
+
+  "env": {
+    "staging": {
+      "name": "fdm-staging",
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "APP_ENV": "staging",
+        "APP_URL": "https://fdm-staging.follies.workers.dev",
+        "ALLOWED_ORIGINS": "https://fdm-staging.follies.workers.dev",
+        "EMAIL_FROM": "Follies d'Après-Midi <orders@example.com>",
+        "PASSWORD_ITERATIONS": "100000"
+      },
+      "secrets": { "required": ["PASSWORD_PEPPER", "COOKIE_SECRET", "SETUP_TOKEN", "RESEND_API_KEY"] },
+      // database_id / KV id are filled in by `wrangler d1 create` / first deploy (see docs/DEPLOY.md)
+      "d1_databases": [{ "binding": "DB", "database_name": "fdm-staging", "migrations_dir": "migrations" }],
+      "kv_namespaces": [{ "binding": "KV" }],
+      "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "fdm-media-staging" }],
+      "images": { "binding": "IMAGES" },
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "fdm-jobs-staging" }],
+        "consumers": [
+          { "queue": "fdm-jobs-staging", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 5, "dead_letter_queue": "fdm-jobs-dlq-staging" }
+        ]
+      },
+      "ratelimits": [
+        { "name": "RL_AUTH", "namespace_id": "2001", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_CHECKOUT", "namespace_id": "2002", "simple": { "limit": 30, "period": 60 } },
+        { "name": "RL_API", "namespace_id": "2003", "simple": { "limit": 600, "period": 60 } }
+      ],
+      "triggers": { "crons": ["*/5 * * * *", "0 * * * *", "30 3 * * *"] }
+    },
+
+    "production": {
+      "name": "fdm",
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "APP_ENV": "production",
+        "APP_URL": "https://fdm.follies.workers.dev",
+        "ALLOWED_ORIGINS": "https://fdm.follies.workers.dev",
+        "EMAIL_FROM": "Follies d'Après-Midi <orders@example.com>",
+        "PASSWORD_ITERATIONS": "100000"
+      },
+      "secrets": { "required": ["PASSWORD_PEPPER", "COOKIE_SECRET", "SETUP_TOKEN", "RESEND_API_KEY"] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "fdm-store",
+          "database_id": "ecba53f7-e059-45d2-90e7-c040b0e294f2",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "kv_namespaces": [{ "binding": "KV" }],
+      "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "fdm-media" }],
+      "images": { "binding": "IMAGES" },
+      "queues": {
+        "producers": [{ "binding": "JOBS", "queue": "fdm-jobs" }],
+        "consumers": [
+          { "queue": "fdm-jobs", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 5, "dead_letter_queue": "fdm-jobs-dlq" }
+        ]
+      },
+      "ratelimits": [
+        { "name": "RL_AUTH", "namespace_id": "3001", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_CHECKOUT", "namespace_id": "3002", "simple": { "limit": 30, "period": 60 } },
+        { "name": "RL_API", "namespace_id": "3003", "simple": { "limit": 600, "period": 60 } }
+      ],
+      "triggers": { "crons": ["*/5 * * * *", "0 * * * *", "30 3 * * *"] }
+    }
+  }
 }

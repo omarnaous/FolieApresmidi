@@ -1,6 +1,6 @@
 import React from 'react';
 import Reveal from './Reveal';
-import { POPUPS } from '../data/products';
+import { POPUPS } from '../data/popups';
 import { eyebrow } from '../data/sections';
 
 export default function PopUps() {

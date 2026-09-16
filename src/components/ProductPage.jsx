@@ -1,53 +1,59 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { PRODUCTS } from '../data/products';
-import { useCart, money } from '../store/cart';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { imageSrc } from '../../shared/api';
+import { useCart } from '../store/cart';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
+import { useEscape, useLinger, useSheetFocus } from '../hooks/useSheet';
+import { featuredIn, isColourOption, isPlaceholderOption, resolveVariant, srcSet } from '../lib/catalog';
+import { isNotFound, messageFor } from '../lib/errors';
+import {
+  useAvailability, useMoney, useProduct, useRelated, useSession, useStore, useWishlist, useWishlistToggle,
+} from '../lib/queries';
 
-/** Swatch dots for the colour names the store actually uses. */
-const DOT = {
-  Brown: '#6b4a34', Green: '#7d8a6a', Blue: '#8fa3bd',
-  Red: '#a52a1e', White: '#f4f1ea', Black: '#1a1a1a',
-};
+/** "Size" → "Sizes", for the spec list. */
+const plural = (name) => (/s$/i.test(name) ? name : `${name}s`);
 
-/** Four more pieces to look at — same category first, then anything else. */
-function related(p) {
-  if (!p) return [];
-  const rest = PRODUCTS.filter((x) => x.id !== p.id);
-  const same = rest.filter((x) => x.line === p.line);
-  return [...same, ...rest.filter((x) => x.line !== p.line)].slice(0, 4);
-}
-
-export default function ProductPage({ product, onClose, onOpen }) {
-  const { add } = useCart();
-  const [size, setSize] = useState(null);
-  const [colour, setColour] = useState(null);
-  const [added, setAdded] = useState(false);
-  const [nudge, setNudge] = useState(false);
+export default function ProductPage({ handle, onClose, onOpen }) {
+  const { add, notify } = useCart();
+  const money = useMoney();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { data: store } = useStore();
   // hold the last product while the page slides out
-  const [cached, setCached] = useState(product);
+  const cached = useLinger(handle, 620);
+  const open = !!handle;
+  const product = useProduct(cached);
+  const p = product.data;
+  const { data: live } = useAvailability(cached, open);
+  const { data: related } = useRelated(cached);
+  const session = useSession();
+  const customer = session.data?.customer ?? null;
+  const { data: wishlist } = useWishlist({ enabled: !!customer });
+  const toggleSave = useWishlistToggle();
+
+  // option index → chosen value
+  const [picks, setPicks] = useState({});
+  const [added, setAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [nudge, setNudge] = useState(false);
   const scroller = useRef(null);
-  const picker = useRef(null);
+  const fields = useRef([]);
   const gallery = useRef(null);
   const [shot, setShot] = useState(0);
 
   useEffect(() => {
-    if (product) { setCached(product); return; }
-    const t = setTimeout(() => setCached(null), 620);
-    return () => clearTimeout(t);
-  }, [product]);
-
-  const p = cached;
-
-  useEffect(() => {
     if (!p) return;
-    setSize(p.sizes.length === 1 ? p.sizes[0] : null);
-    setColour(p.colours.length === 1 ? p.colours[0] : null);
+    // an option with a single value is already chosen
+    setPicks(Object.fromEntries(
+      p.options.flatMap((o, i) => (o.values.length === 1 ? [[i, o.values[0].value]] : [])),
+    ));
     setAdded(false);
     setShot(0);
     // a new piece always starts at the top, never mid-way down the last one
     scroller.current?.scrollTo({ top: 0, behavior: 'auto' });
     gallery.current?.scrollTo({ left: 0, behavior: 'auto' });
-  }, [p]);
+    // keyed on the piece, not the object: a refetch of the same piece keeps the picks
+  }, [p?.id]);
 
   /* On a phone the gallery is a swipeable row, so the dots follow the
      scroll rather than the other way round. Above 900px it is a stacked
@@ -78,24 +84,20 @@ export default function ProductPage({ product, onClose, onOpen }) {
     el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    const esc = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', esc);
-    return () => window.removeEventListener('keydown', esc);
-  }, [onClose]);
+  useEscape(open, onClose);
+  useSheetFocus(scroller, open);
 
-  const can = useMemo(() => {
-    if (!p) return { size: () => false, colour: () => false };
-    return {
-      size: (s) => p.variants.some((v) => v.size === s && (!colour || v.colour === colour) && v.available),
-      colour: (c) => p.variants.some((v) => v.colour === c && (!size || v.size === size) && v.available),
-    };
-  }, [p, size, colour]);
+  /* Live stock wins; the catalog's cached flag stands in until it arrives. */
+  const stock = useMemo(() => new Map((live?.variants ?? []).map((v) => [v.id, v])), [live]);
+  const inStock = (v) => stock.get(v.id)?.available ?? v.available;
 
-  const more = useMemo(() => related(p), [p]);
+  const variant = useMemo(
+    () => (p ? resolveVariant(p, Object.fromEntries(p.options.map((o, i) => [o.name, picks[i]]))) : null),
+    [p, picks],
+  );
 
   // swipe down from the top to leave — the gallery keeps its own sideways swipes
-  useSwipeDismiss(scroller, onClose, { enabled: !!product });
+  useSwipeDismiss(scroller, onClose, { enabled: open });
 
   // data-lenis-prevent: opening this stops Lenis, and a stopped Lenis
   // preventDefaults every touchmove — including the ones meant for this page.
@@ -104,56 +106,144 @@ export default function ProductPage({ product, onClose, onOpen }) {
   // — without it the swipe effect ran once against a null element (the first
   // render after a product is picked still has cached === null) and, with
   // nothing in its deps changing afterwards, never re-attached.
-  if (!p) return <div className="pdp" aria-hidden="true" ref={scroller} data-lenis-prevent />;
+  if (!cached) return <div className="pdp" aria-hidden="true" ref={scroller} data-lenis-prevent />;
 
-  const open = !!product;
-  const needsColour = p.colours.length > 0;
-  const ready = !!size && (!needsColour || !!colour);
-  const cta = ready
-    ? `Add to bag — ${money(p.price)}`
-    : needsColour && !colour ? 'Select a colour' : 'Select a size';
+  const bar = (
+    <header className="pdp-bar">
+      <button className="pdp-back label" onClick={onClose}>
+        <span aria-hidden="true">←</span> Boutique
+      </button>
+      <span className="pdp-mark">FDM</span>
+      <button className="pdp-x label" onClick={onClose} aria-label="Close">Close</button>
+    </header>
+  );
 
-  /* A dead button tells you nothing. If a choice is still missing, take the
-     shopper to it and flash it rather than refusing the tap. */
-  const submit = () => {
-    if (!ready) {
-      picker.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      setNudge(true);
-      setTimeout(() => setNudge(false), 900);
-      return;
-    }
-    add(p, size, colour);
-    setAdded(true);
-  };
-
-  return (
+  const sheet = (children, label) => (
     <div
       className={`pdp ${open ? 'on' : ''}`}
       role="dialog"
       aria-modal="true"
-      aria-label={p.name}
+      aria-label={label}
       aria-hidden={!open}
+      tabIndex={-1}
       ref={scroller}
       data-lenis-prevent
     >
-      <header className="pdp-bar">
-        <button className="pdp-back label" onClick={onClose}>
-          <span aria-hidden="true">←</span> Boutique
-        </button>
-        <span className="pdp-mark">FDM</span>
-        <button className="pdp-x label" onClick={onClose} aria-label="Close">Close</button>
-      </header>
+      {bar}
+      {children}
+    </div>
+  );
 
+  if (!p) {
+    if (product.isError) {
+      const gone = isNotFound(product.error);
+      return sheet(
+        <div className="co-done" role="alert">
+          <h1 className="display d-md">{gone ? 'This piece is not here.' : 'This piece did not load.'}</h1>
+          <p className="lede">
+            {gone ? 'It may have sold through, or the link is out of date.' : 'Check your connection, then try again.'}
+          </p>
+          {!gone && <button className="btn" onClick={() => product.refetch()}>Try again</button>}
+          <button className="btn solid" onClick={onClose}>Back to the boutique</button>
+        </div>,
+        'Product',
+      );
+    }
+    return sheet(
+      <div className="pdp-body" aria-busy="true">
+        <div className="pdp-media">
+          <div className="pdp-gallery"><div className="pdp-shot plate skel" /></div>
+        </div>
+        <aside className="pdp-buy">
+          <div className="pdp-buy-inner">
+            <span className="skel skel-line" style={{ width: '32%' }} />
+            <span className="skel skel-line pdp-skel-name" />
+            <span className="skel skel-line" style={{ width: '18%' }} />
+          </div>
+        </aside>
+      </div>,
+      'Loading product',
+    );
+  }
+
+  const drop = featuredIn(p, store);
+  const choices = p.options.map((o, index) => ({ ...o, index })).filter((o) => !isPlaceholderOption(o));
+  const missing = choices.find((o) => !picks[o.index]);
+  const soldOut = variant ? !inStock(variant) : !p.available && !missing;
+  const ready = !!variant && !soldOut;
+  const price = variant ? variant.price : p.price;
+  const was = variant ? variant.compareAtPrice : p.compareAtPrice;
+  const level = variant ? stock.get(variant.id) : null;
+  const low = level?.lowStock && level.quantity !== null ? `Only ${level.quantity} left` : null;
+  const saved = !!wishlist?.items.some((x) => x.id === p.id);
+  const more = (related?.items ?? []).filter((m) => m.id !== p.id).slice(0, 4);
+
+  /** Can this value still be bought, given what else is already picked? */
+  const can = (index, value) =>
+    p.variants.some((v) =>
+      v.options[index] === value
+      && p.options.every((_, j) => j === index || !picks[j] || v.options[j] === picks[j])
+      && inStock(v));
+
+  const pick = (index, value) => {
+    setPicks((s) => ({ ...s, [index]: value }));
+    setAdded(false);
+  };
+
+  const cta = soldOut
+    ? 'Sold out'
+    : ready
+      ? `Add to bag — ${money(price)}`
+      : `Select a ${isColourOption(missing?.name ?? '') ? 'colour' : (missing?.name ?? 'size').toLowerCase()}`;
+
+  /* A dead button tells you nothing. If a choice is still missing, take the
+     shopper to it and flash it rather than refusing the tap. */
+  const submit = async () => {
+    if (!variant) {
+      fields.current[missing?.index ?? 0]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      setNudge(true);
+      setTimeout(() => setNudge(false), 900);
+      return;
+    }
+    if (soldOut) { notify('Sold out'); return; }
+    if (adding) return;
+    setAdding(true);
+    const ok = await add(p, variant.id);
+    setAdding(false);
+    if (ok) setAdded(true);
+  };
+
+  const save = () => {
+    if (session.isPending) return;
+    if (!customer) {
+      // sign-in takes this entry's place and hands straight back to it
+      navigate(`/account/login?next=${encodeURIComponent(location.pathname)}`, { replace: true, state: location.state });
+      return;
+    }
+    toggleSave.mutate({ product: p, saved }, { onError: (err) => notify(messageFor(err)) });
+  };
+
+  const priceLine = (
+    <>
+      {money(price)}
+      {was ? <s className="price-was"><span className="sr-only">Was </span>{money(was)}</s> : null}
+    </>
+  );
+
+  return sheet(
+    <>
       <div className="pdp-body">
         {/* One markup for both: a stacked column on a wide screen, a
             swipeable snapping row on a phone. */}
         <div className="pdp-media">
           <div className="pdp-gallery" ref={gallery} onScroll={onGalleryScroll}>
-            {p.images.map((src, i) => (
-              <figure className="pdp-shot plate packshot" key={src}>
+            {p.images.map((m, i) => (
+              <figure className="pdp-shot plate packshot" key={m.id}>
                 <img
-                  src={src}
-                  alt={`${p.name}${i ? ` — view ${i + 1}` : ''}`}
+                  src={imageSrc(m, 1400)}
+                  srcSet={srcSet(m, [640, 960, 1400, 2000])}
+                  sizes="(max-width: 900px) 100vw, 62vw"
+                  alt={m.alt || `${p.title}${i ? ` — view ${i + 1}` : ''}`}
                   loading={i === 0 ? 'eager' : 'lazy'}
                 />
                 {p.images.length > 1 && (
@@ -165,9 +255,9 @@ export default function ProductPage({ product, onClose, onOpen }) {
 
           {p.images.length > 1 && (
             <div className="pdp-marks" role="tablist" aria-label="Views">
-              {p.images.map((src, i) => (
+              {p.images.map((m, i) => (
                 <button
-                  key={src}
+                  key={m.id}
                   role="tab"
                   aria-selected={i === shot}
                   aria-label={`View ${i + 1}`}
@@ -184,77 +274,75 @@ export default function ProductPage({ product, onClose, onOpen }) {
         {/* Sticky on a wide screen, so the buy panel never scrolls away. */}
         <aside className="pdp-buy">
           <div className="pdp-buy-inner">
-            <div className="label muted">{p.line}{p.drop ? ' · Échappée 4 à 7' : ''}</div>
-            <h1 className="pdp-name display">{p.name}</h1>
-            <div className="pdp-price">{money(p.price)}</div>
+            <div className="label muted">{[p.productType, drop?.title].filter(Boolean).join(' · ')}</div>
+            <h1 className="pdp-name display">{p.title}</h1>
+            <div className="pdp-price">{priceLine}</div>
+            {low && <span className="label pdp-low" role="status">{low}</span>}
 
-            {p.note && <p className="pdp-note">{p.note}</p>}
+            {p.descriptionHtml ? (
+              // sanitized by the Worker before it is stored
+              <div className="pdp-note" dangerouslySetInnerHTML={{ __html: p.descriptionHtml }} />
+            ) : p.description ? (
+              <p className="pdp-note">{p.description}</p>
+            ) : null}
 
-            {needsColour && (
-              <div className="pdp-field">
-                <div className="pdp-field-head">
-                  <span className="label muted">Colour</span>
+            {choices.map((o) => {
+              const colour = isColourOption(o.name);
+              return (
+                <div
+                  key={o.name}
+                  className={`pdp-field ${nudge && missing?.index === o.index ? 'nudge' : ''}`}
+                  ref={(el) => { fields.current[o.index] = el; }}
+                  role="group"
+                  aria-label={o.name}
+                >
+                  <div className="pdp-field-head">
+                    <span className="label muted">{o.name}</span>
+                  </div>
+                  <div className={colour ? 'swatches' : 'sizes'}>
+                    {o.values.map(({ value, swatch }) => (
+                      <button
+                        key={value}
+                        className={`${colour ? 'swatch' : 'size'} ${picks[o.index] === value ? 'on' : ''}`}
+                        aria-pressed={picks[o.index] === value}
+                        disabled={!can(o.index, value)}
+                        onClick={() => pick(o.index, value)}
+                      >
+                        {colour && <i style={{ background: swatch || 'var(--sand)' }} />}
+                        {value}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="swatches">
-                  {p.colours.map((c) => (
-                    <button
-                      key={c}
-                      className={`swatch ${colour === c ? 'on' : ''}`}
-                      disabled={!can.colour(c)}
-                      onClick={() => setColour(c)}
-                    >
-                      <i style={{ background: DOT[c] || 'var(--sand)' }} />
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className={`pdp-field ${nudge ? 'nudge' : ''}`} ref={picker}>
-              <div className="pdp-field-head">
-                <span className="label muted">Size</span>
-              </div>
-              <div className="sizes">
-                {p.sizes.map((s) => (
-                  <button
-                    key={s}
-                    className={`size ${size === s ? 'on' : ''}`}
-                    disabled={!can.size(s)}
-                    onClick={() => setSize(s)}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
+              );
+            })}
 
             <button
               className={`btn solid block pdp-add ${ready ? '' : 'waiting'}`}
               onClick={submit}
+              aria-busy={adding}
             >
               {added ? 'Added to your bag ✓' : cta}
             </button>
 
+            <button className="label link-u pdp-save" onClick={save} aria-pressed={saved}>
+              {saved ? 'Saved' : 'Save'}
+            </button>
+
             <dl className="pdp-specs">
-              <div className="spec"><dt>Category</dt><dd>{p.line}</dd></div>
-              {p.colours.length > 0 && (
-                <div className="spec"><dt>Colours</dt><dd>{p.colours.join(', ')}</dd></div>
-              )}
-              <div className="spec"><dt>Sizes</dt><dd>{p.sizes.join(', ')}</dd></div>
+              {p.productType && <div className="spec"><dt>Category</dt><dd>{p.productType}</dd></div>}
+              {choices.map((o) => (
+                <div className="spec" key={o.name}>
+                  <dt>{plural(o.name)}</dt>
+                  <dd>{o.values.map((v) => v.value).join(', ')}</dd>
+                </div>
+              ))}
               <div className="spec">
                 <dt>Exchanges</dt>
                 <dd>
                   Within 24 hours of receiving, for a defect or a wrong item or size. Unworn,
-                  unwashed, tags attached. No refunds — exchange only.
-                </dd>
-              </div>
-              <div className="spec">
-                <dt>Store</dt>
-                <dd>
-                  <a className="link-u" href={p.url} target="_blank" rel="noreferrer noopener">
-                    View on folliesdapresmidi.com ↗
-                  </a>
+                  unwashed, tags attached. No refunds — exchange only.{' '}
+                  <Link className="link-u" to="/pages/exchange-policy">Exchange policy</Link>
                 </dd>
               </div>
             </dl>
@@ -271,10 +359,18 @@ export default function ProductPage({ product, onClose, onOpen }) {
             {more.map((m) => (
               <button className="pdp-rel" key={m.id} onClick={() => onOpen(m)}>
                 <span className="plate packshot pdp-rel-plate">
-                  <img src={m.images[0]} alt={m.name} loading="lazy" />
+                  {m.images[0] && (
+                    <img
+                      src={imageSrc(m.images[0], 640)}
+                      srcSet={srcSet(m.images[0])}
+                      sizes="(max-width: 900px) 50vw, 25vw"
+                      alt={m.images[0].alt || m.title}
+                      loading="lazy"
+                    />
+                  )}
                 </span>
                 <span className="pdp-rel-meta">
-                  <span className="pdp-rel-name">{m.name}</span>
+                  <span className="pdp-rel-name">{m.title}</span>
                   <span className="card-price">{money(m.price)}</span>
                 </span>
               </button>
@@ -286,13 +382,16 @@ export default function ProductPage({ product, onClose, onOpen }) {
       {/* Phone only: the price and the button stay in reach at any scroll depth. */}
       <div className="pdp-dock">
         <div className="pdp-dock-price">
-          <span className="label muted">{[colour, size].filter(Boolean).join(' · ') || p.line}</span>
-          <span className="card-price">{money(p.price)}</span>
+          <span className="label muted">
+            {choices.map((o) => picks[o.index]).filter(Boolean).join(' · ') || p.productType}
+          </span>
+          <span className="card-price">{priceLine}</span>
         </div>
         <button className={`btn solid pdp-dock-add ${ready ? '' : 'waiting'}`} onClick={submit}>
-          {added ? 'Added ✓' : 'Add to bag'}
+          {added ? 'Added ✓' : soldOut ? 'Sold out' : 'Add to bag'}
         </button>
       </div>
-    </div>
+    </>,
+    p.title,
   );
 }

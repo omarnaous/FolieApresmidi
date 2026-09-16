@@ -1,11 +1,33 @@
 import React from 'react';
 import Reveal from './Reveal';
-import { EDITO } from '../data/assets';
+import { imageSrc } from '../../shared/api';
 import { eyebrow } from '../data/sections';
-import { money } from '../store/cart';
+import { srcSet } from '../lib/catalog';
+import { useMoney, useProductList, useStore } from '../lib/queries';
+
+const shot = (p, sizes) =>
+  p.images[0] ? (
+    <img
+      src={imageSrc(p.images[0], 960)}
+      srcSet={srcSet(p.images[0], [640, 960, 1400])}
+      sizes={sizes}
+      alt={p.images[0].alt || p.title}
+      loading="lazy"
+    />
+  ) : null;
 
 export default function Editorial({ onOpen }) {
-  const [hero, a, b] = EDITO;
+  const money = useMoney();
+  const { data: store } = useStore();
+  const handle = store?.editorialCollectionHandle;
+  const { data } = useProductList(
+    { collection: handle ?? undefined, sort: 'featured', limit: 3 },
+    { enabled: !!handle },
+  );
+  const [hero, a, b] = handle ? data?.items ?? [] : [];
+
+  // the section is built around a piece; without one it waits rather than showing a hole
+  if (!hero) return null;
 
   return (
     <section className="section shell tight-top" id="journal">
@@ -14,9 +36,15 @@ export default function Editorial({ onOpen }) {
           variant="rv-mask"
           className="rv-img plate packshot"
           data-cursor="View"
+          role="button"
+          tabIndex={0}
+          aria-label={hero.title}
           onClick={() => onOpen(hero)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(hero); }
+          }}
         >
-          <img src={hero.images[0]} alt={hero.name} loading="lazy" />
+          {shot(hero, '(max-width: 860px) 100vw, 50vw')}
         </Reveal>
 
         <div className="edito-txt">
@@ -36,7 +64,7 @@ export default function Editorial({ onOpen }) {
           </Reveal>
           <Reveal delay={230}>
             <div className="label muted">
-              {hero.name} — {money(hero.price)} · {hero.line}
+              {hero.title} — {money(hero.price)}{hero.productType ? ` · ${hero.productType}` : ''}
             </div>
           </Reveal>
           <Reveal delay={280}>
@@ -53,9 +81,15 @@ export default function Editorial({ onOpen }) {
             delay={i * 180}
             className={`rv-img plate packshot ${i === 0 ? 'a' : 'b'}`}
             data-cursor="View"
+            role="button"
+            tabIndex={0}
+            aria-label={p.title}
             onClick={() => onOpen(p)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(p); }
+            }}
           >
-            <img src={p.images[0]} alt={p.name} loading="lazy" />
+            {shot(p, i === 0 ? '(max-width: 760px) 75vw, 58vw' : '(max-width: 760px) 50vw, 33vw')}
           </Reveal>
         ))}
       </div>

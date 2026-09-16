@@ -1,14 +1,20 @@
 import React from 'react';
+import { Link } from 'react-router';
 import { FEED, post } from '../data/assets';
 import { useCart } from '../store/cart';
 import { SECTIONS } from '../data/sections';
+import { useStore } from '../lib/queries';
+import { instagramHandle } from '../lib/store';
 
 const LINKS = SECTIONS.map((s) => [s.label, s.href]);
 
 const STRIP = FEED.slice(0, 3);
 
-export default function MobileMenu({ open, onClose, onSearch }) {
+export default function MobileMenu({ open, onClose, onAll }) {
   const { count, openCart } = useCart();
+  const { data: store } = useStore();
+  const ig = instagramHandle(store?.contact.instagram);
+  const email = store?.contact.email;
 
   return (
     // data-lenis-prevent: same reason as the other overlays -- Lenis is stopped
@@ -32,7 +38,7 @@ export default function MobileMenu({ open, onClose, onSearch }) {
         <button
           className="menu-accent"
           style={{ transitionDelay: `${160 + LINKS.length * 55}ms` }}
-          onClick={() => { onClose(); onSearch(); }}
+          onClick={() => { onClose(); onAll(); }}
         >
           All pieces
         </button>
@@ -42,6 +48,13 @@ export default function MobileMenu({ open, onClose, onSearch }) {
         >
           Bag {count > 0 && <sup className="menu-count">{count}</sup>}
         </button>
+        <Link
+          to="/account"
+          onClick={onClose}
+          style={{ transitionDelay: `${160 + (LINKS.length + 2) * 55}ms` }}
+        >
+          Account
+        </Link>
       </nav>
 
       <div className="menu-strip">
@@ -53,15 +66,17 @@ export default function MobileMenu({ open, onClose, onSearch }) {
       </div>
 
       <div className="menu-foot">
-        <a className="label link-u" href="mailto:folliesdapresmidi@gmail.com">folliesdapresmidi@gmail.com</a>
-        <a
-          className="label link-u"
-          href="https://instagram.com/folliesdapresmidi"
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          @folliesdapresmidi ↗
-        </a>
+        {email && <a className="label link-u" href={`mailto:${email}`}>{email}</a>}
+        {ig && (
+          <a
+            className="label link-u"
+            href={`https://instagram.com/${ig}`}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            @{ig} ↗
+          </a>
+        )}
       </div>
     </div>
   );

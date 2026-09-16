@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import Lenis from 'lenis';
 
 import Preloader from './components/Preloader';
@@ -18,16 +19,31 @@ import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
 import Checkout from './components/Checkout';
 import ProductPage from './components/ProductPage';
+import OrderSheet from './checkout/OrderSheet';
+import AccountSheet from './account/AccountSheet';
+import PageSheet from './content/PageSheet';
 import { useCart } from './store/cart';
+import { parseRoute, sheetState, useCloseOverlay, useSheetNavigate } from './lib/routes';
 
 export default function App() {
   const [ready, setReady] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [quick, setQuick] = useState(null);
-  const [catalogue, setCatalogue] = useState({ open: false, category: 'All' });
-  const [checkout, setCheckout] = useState(false);
-  const { open: cartOpen, closeCart, toast } = useCart();
+  const { open: bagOpen, closeCart, toast } = useCart();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const closeOverlay = useCloseOverlay();
+  const sheetNavigate = useSheetNavigate();
   const lenis = useRef(null);
+
+  /* The URL says which overlay is up; the home page is always underneath. */
+  const route = useMemo(() => parseRoute(location.pathname), [location.pathname]);
+  const here = location.pathname + location.search;
+  // the catalogue on its own route, or still open beneath a piece opened from it
+  const catalogue =
+    route.kind === 'catalogue' ? here
+      : route.kind === 'product' ? sheetState(location.state).catalogue ?? null
+        : null;
+  const cartOpen = bagOpen || route.kind === 'cart';
 
   /* Inertia scroll — the single biggest tell of a considered site. */
   useEffect(() => {
@@ -61,13 +77,35 @@ export default function App() {
   }, []);
 
   /* One place decides whether the page may scroll. */
-  const locked = !ready || menu || cartOpen || !!quick || catalogue.open || checkout;
+  const locked = !ready || menu || cartOpen || route.kind !== 'home';
   useEffect(() => {
     document.body.classList.toggle('is-locked', locked);
     if (lenis.current) locked ? lenis.current.stop() : lenis.current.start();
   }, [locked]);
 
-  const closeAll = useCallback(() => { closeCart(); setQuick(null); }, [closeCart]);
+  // the back button can change the page under an open menu
+  useEffect(() => { setMenu(false); }, [location.pathname]);
+
+  const openProduct = useCallback((product) => navigate(`/products/${product.handle}`), [navigate]);
+  // a piece opened from the catalogue layers over it; Close lands back on it
+  const openFromCatalogue = useCallback(
+    (product) => navigate(`/products/${product.handle}`, { state: { catalogue: here } }),
+    [navigate, here],
+  );
+  // piece to piece inside the product page, so Close leaves all of them at once
+  const openRelated = useCallback((product) => sheetNavigate(`/products/${product.handle}`), [sheetNavigate]);
+  const openCatalogue = useCallback((handle) => navigate(`/collections/${handle ?? 'all'}`), [navigate]);
+  const openSearch = useCallback(() => navigate('/search'), [navigate]);
+
+  const closeBag = useCallback(() => {
+    closeCart();
+    if (route.kind === 'cart') closeOverlay();
+  }, [closeCart, closeOverlay, route.kind]);
+
+  const checkout = useCallback(() => {
+    closeCart();
+    navigate('/checkout', { replace: route.kind === 'cart' });
+  }, [closeCart, navigate, route.kind]);
 
   return (
     <>
@@ -77,21 +115,21 @@ export default function App() {
       <Nav
         onMenu={() => setMenu((m) => !m)}
         menuOpen={menu}
-        onSearch={() => setCatalogue({ open: true, category: 'All' })}
+        onSearch={openSearch}
       />
       <MobileMenu
         open={menu}
         onClose={() => setMenu(false)}
-        onSearch={() => setCatalogue({ open: true, category: 'All' })}
+        onAll={() => openCatalogue(null)}
       />
 
       <main>
         <Hero ready={ready} />
         <Marquee />
         <Feed />
-        <Shop onOpen={setQuick} onAll={(category) => setCatalogue({ open: true, category })} />
-        <Editorial onOpen={setQuick} />
-        <Lookbook onOpen={setQuick} />
+        <Shop onOpen={openProduct} onAll={openCatalogue} />
+        <Editorial onOpen={openProduct} />
+        <Lookbook onOpen={openProduct} />
         <PopUps />
         <Newsletter />
       </main>
@@ -100,16 +138,23 @@ export default function App() {
 
       {/* the product page covers the screen on its own, so only the bag
           needs a scrim behind it */}
-      <div className={`scrim ${cartOpen ? 'on' : ''}`} onClick={closeAll} />
+      <div className={`scrim ${cartOpen ? 'on' : ''}`} onClick={closeBag} />
       <Catalogue
-        open={catalogue.open}
-        initialCategory={catalogue.category}
-        onClose={() => setCatalogue((c) => ({ ...c, open: false }))}
-        onOpen={setQuick}
+        path={catalogue}
+        top={route.kind === 'catalogue'}
+        onClose={closeOverlay}
+        onOpen={openFromCatalogue}
       />
-      <CartDrawer onCheckout={() => { closeCart(); setCheckout(true); }} />
-      <Checkout open={checkout} onClose={() => setCheckout(false)} />
-      <ProductPage product={quick} onClose={() => setQuick(null)} onOpen={setQuick} />
+      <CartDrawer open={cartOpen} onClose={closeBag} onCheckout={checkout} />
+      <Checkout open={route.kind === 'checkout'} onClose={closeOverlay} />
+      <OrderSheet token={route.kind === 'order' ? route.token : null} onClose={closeOverlay} />
+      <AccountSheet open={route.kind === 'account'} onClose={closeOverlay} />
+      <PageSheet handle={route.kind === 'page' ? route.handle : null} onClose={closeOverlay} />
+      <ProductPage
+        handle={route.kind === 'product' ? route.handle : null}
+        onClose={closeOverlay}
+        onOpen={openRelated}
+      />
 
       <div className={`toast ${toast ? 'on' : ''}`} role="status" aria-live="polite">
         <span className="label">{toast || ''}</span>

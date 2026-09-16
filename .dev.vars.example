@@ -1,0 +1,17 @@
+# Local secrets for `wrangler dev`. Copy to .dev.vars (gitignored) and fill in.
+# In staging/production set each with `wrangler secret put NAME --env <env>`.
+
+# Mixed into every password hash (HMAC pepper). Long random string. Never change
+# it after launch, or every password stops matching.
+PASSWORD_PEPPER=
+
+# Signs the guest cart cookie and cart-recovery links. Long random string.
+COOKIE_SECRET=
+
+# One-time token that unlocks /admin setup (creating the owner account) while
+# no staff account exists.
+SETUP_TOKEN=
+
+# Resend API key. Leave empty locally: emails are logged and listed at
+# GET /api/dev/mail instead of being sent.
+RESEND_API_KEY=

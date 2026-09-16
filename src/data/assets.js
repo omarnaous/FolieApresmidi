@@ -4,11 +4,9 @@
  * ─────────────────────────────────────────────────────────────
  *  The campaign film is the store's own footage, re-encoded for the
  *  web (9.4 MB → 304 KB; it is a locked-off plate, so it compresses
- *  hard). Everything else is drawn from the live catalogue, so the
+ *  hard). The pieces themselves come from the catalogue API, so the
  *  lookbook and the boutique can never drift apart.
  */
-
-import { PRODUCTS } from './products';
 
 /**
  * Campaign frames lifted from @folliesdapresmidi. Instagram serves a
@@ -57,24 +55,8 @@ export const PAPER = [at('Da0rTC9ukIS'), at('DavkNIAuSb3'), at('Db3uxqvOUTU')];
 /** Act V — the frame the wordmark sits over. */
 export const FINALE = at('DbxqBuiub7U');               // two at the car, night
 
-const pick = (...ids) => ids.map((id) => PRODUCTS.find((p) => p.id === id)).filter(Boolean);
-
-/** Six pieces of the current drop, in the order they read best. */
-export const LOOKS = pick(
-  'mini-robe-rouge',        // La chaleur qui reste
-  'stole-my-dads-blazer',   // No rush
-  'overall',                // Corps d'après-midi
-  'bomber-jacket',          // La dominante
-  'jupe-etagere',           // Etagère
-  'bralette-triangle'       // Presque rien
-);
-
-/** Editorial stack. */
-export const EDITO = pick('zebre', 'bouquet', 'l-heure-defendue');
-
-/** Held behind the preloader. */
+/** Held behind the preloader: the film's opening frames. */
 export const CRITICAL = [
   HERO_FRAME.src,
   ...SHEET.slice(0, 3).map((f) => f.src),
-  ...PRODUCTS.slice(0, 2).map((p) => p.images[0]),
 ];
