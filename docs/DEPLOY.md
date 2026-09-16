@@ -34,6 +34,15 @@ the free plan gives a request 10 ms of CPU and the full count does not fit.
 strength. Do not point a real shop at this environment.
 
 ```bash
+npx wrangler login          # or export CLOUDFLARE_API_TOKEN=...
+./scripts/deploy-preview.sh
+```
+
+That fills in any missing `.dev.vars`, pushes the four secrets, deploys,
+seeds 54 demo products and prints the URL and the test logins. Re-running it
+is safe. The steps by hand, if you would rather:
+
+```bash
 npx wrangler secret put PASSWORD_PEPPER --env preview   # and COOKIE_SECRET, SETUP_TOKEN
 npm run deploy:preview      # typecheck → tests → build → migrate → deploy
 npm run db:seed:preview     # 54 demo products, discount codes, a test owner
