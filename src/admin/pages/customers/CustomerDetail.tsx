@@ -119,9 +119,6 @@ function CustomerView({ customer: c }: { customer: AdminCustomerDTO }) {
               <a href={`mailto:${c.email}`} className="adm-link">
                 {c.email}
               </a>
-              <span>
-                <Badge tone={c.emailVerified ? 'success' : 'neutral'}>{c.emailVerified ? 'Email verified' : 'Email not verified'}</Badge>
-              </span>
               {c.phone ? (
                 <a href={`tel:${c.phone}`} className="adm-link">
                   {c.phone}
@@ -131,12 +128,11 @@ function CustomerView({ customer: c }: { customer: AdminCustomerDTO }) {
               )}
             </div>
           </Card>
-          <Card title="Marketing & account">
+          <Card title="Marketing">
             <div className="adm-stack-sm">
               <span>
                 <Badge tone={c.acceptsMarketing ? 'success' : 'neutral'}>{c.acceptsMarketing ? 'Subscribed to emails' : 'Not subscribed'}</Badge>
               </span>
-              <span>{c.hasAccount ? 'Has a customer account' : 'Guest (no account)'}</span>
             </div>
           </Card>
           <NoteCard customer={c} canWrite={canWrite} />

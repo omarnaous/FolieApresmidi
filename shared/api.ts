@@ -170,6 +170,65 @@ export interface MenuItemDTO {
   collectionHandle: string | null;
 }
 
+/** The home page sections the owner can rename, in page order. */
+export const HOME_SECTIONS = ['maison', 'boutique', 'accessories', 'journal', 'popups'] as const;
+export type HomeSectionKey = (typeof HOME_SECTIONS)[number];
+
+export interface HomeSectionDTO {
+  key: HomeSectionKey;
+  /** The full name, printed in the section eyebrow and the mobile menu: "Maison FDM". */
+  label: string;
+  /** The top bar's shorter name: "Maison". */
+  navLabel: string;
+  /**
+   * Off and the section is left off the home page altogether, along with its
+   * link in the top bar and the mobile menu. The sections still showing keep
+   * consecutive numbers, so no gap appears where a hidden one was.
+   */
+  visible: boolean;
+}
+
+/** A pop-up in the "Where to find us" section. `past` greys the row out. */
+export interface PopUpDTO {
+  place: string;
+  city: string;
+  dates: string;
+  time: string;
+  status: 'open' | 'past';
+}
+
+/** One stop in the Maison section's lift directory. Floor numbers are positions, from 1. */
+export interface FloorDTO {
+  name: string;
+  line: string | null;
+  /** Where the floor leads; null = all products. */
+  collectionHandle: string | null;
+  /** The image chosen in the admin, or else the collection's own picture. */
+  image: MediaDTO | null;
+}
+
+/**
+ * Everything the owner writes for the home page, in page order. `heading`
+ * marks italics with *asterisks*. Section order follows `sections`.
+ */
+export interface HomeDTO {
+  sections: HomeSectionDTO[];
+  /** The opening film. Without an uploaded video the built-in campaign film plays. */
+  hero: { video: MediaDTO | null };
+  /** The words that run round the ribbon under the film. */
+  ribbon: string[];
+  maison: { heading: string; intro: string | null };
+  floors: FloorDTO[];
+  /** The boutique's own title; with no heading it takes the featured collection's name. */
+  boutique: { heading: string | null; intro: string | null };
+  /** The Accessories section's title and the line under it. */
+  accessories: { heading: string; intro: string | null };
+  /** Limited edition: the words, the button under them, and the notebook it downloads. */
+  journal: { heading: string; intro: string; buttonLabel: string; notebook: MediaDTO | null };
+  popups: { heading: string; intro: string | null; rows: PopUpDTO[] };
+  footer: { blurb: string; careNote: string | null };
+}
+
 /** GET /api/store */
 export interface StoreDTO {
   name: string;
@@ -187,7 +246,57 @@ export interface StoreDTO {
   /** Countries that have a shipping zone (checkout country select). */
   shipsTo: { code: string; name: string }[];
   lowStockThreshold: number;
+  home: HomeDTO;
+  sizeChart: SizeChartDTO;
+  /**
+   * What joining the list is worth, in words the page can print: "15% off
+   * your first order". The code itself is not here — that is handed over
+   * only to whoever actually subscribes. Null when no code is set, or when
+   * the one set is switched off.
+   */
+  newsletterOffer: string | null;
 }
+
+/** How many measurements and sizes a chart can hold. */
+export const SIZE_CHART_MAX_COLUMNS = 6;
+export const SIZE_CHART_MAX_ROWS = 14;
+
+/**
+ * The store's size chart, shown on every product that has sizes. One chart
+ * for the shop, edited in the admin's settings. A row's `values` lines up
+ * with `columns`; an empty cell is simply not filled in yet, and a row with
+ * nothing in it is left off the page.
+ */
+export interface SizeChartDTO {
+  heading: string;
+  intro: string | null;
+  columns: string[];
+  rows: { size: string; values: string[] }[];
+  note: string | null;
+}
+
+export const SizeChartInput = z
+  .object({
+    heading: z.string().trim().min(1, 'Required').max(60),
+    intro: z.string().trim().max(200).nullish().transform((v) => v || null),
+    columns: z.array(z.string().trim().min(1, 'Name this measurement').max(24)).max(SIZE_CHART_MAX_COLUMNS),
+    rows: z
+      .array(
+        z.object({
+          size: z.string().trim().min(1, 'Name this size').max(24),
+          values: z.array(z.string().trim().max(24)).max(SIZE_CHART_MAX_COLUMNS),
+        }),
+      )
+      .max(SIZE_CHART_MAX_ROWS),
+    note: z.string().trim().max(200).nullish().transform((v) => v || null),
+  })
+  .superRefine((chart, ctx) => {
+    chart.rows.forEach((r, i) => {
+      if (r.values.length !== chart.columns.length) {
+        ctx.addIssue({ code: 'custom', path: ['rows', i, 'values'], message: 'One measurement per column' });
+      }
+    });
+  });
 
 export interface ProductOptionDTO {
   name: string; // "Size", "Colour"
@@ -262,6 +371,15 @@ export const ProductListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(48),
 });
 export type ProductListQuery = z.input<typeof ProductListQuery>;
+
+/**
+ * Shop the look under a product. `curated` when the owner chose the pieces;
+ * otherwise the store suggested them.
+ */
+export interface LookDTO {
+  items: ProductDTO[];
+  curated: boolean;
+}
 
 export interface ProductListDTO extends Page<ProductDTO> {
   facets: {
@@ -464,46 +582,72 @@ export interface OrderDTO extends OrderSummaryDTO {
 
 /* ═══════════════════════ auth & account ═══════════════════════ */
 
-export interface CustomerDTO {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
-  emailVerified: boolean;
-  acceptsMarketing: boolean;
-  createdAt: Timestamp;
-}
-
-/** GET /api/auth/session — also (re)sets the CSRF cookie. */
+/**
+ * GET /api/auth/session — (re)sets the CSRF cookie. The store has no
+ * customer accounts: shoppers check out as guests, and only staff sign in.
+ */
 export interface SessionDTO {
-  customer: CustomerDTO | null;
   csrfToken: string;
 }
 
-export const RegisterInput = z.object({
-  email: zEmail,
-  password: zPassword,
-  name: zName,
-  acceptsMarketing: z.boolean().default(false),
-});
-export const LoginInput = z.object({ email: zEmail, password: z.string().min(1, 'Required').max(128) });
+/** Staff password reset (the admin's sign-in screens). */
 export const ForgotPasswordInput = z.object({ email: zEmail });
 export const ResetPasswordInput = z.object({ token: z.string().min(20).max(200), password: zPassword });
-export const VerifyEmailInput = z.object({ token: z.string().min(20).max(200) });
-export const UpdateAccountInput = z.object({
-  name: zName.optional(),
-  phone: zPhone.nullable().optional(),
-  acceptsMarketing: z.boolean().optional(),
-});
-export const ChangePasswordInput = z.object({ currentPassword: z.string().min(1).max(128), newPassword: zPassword });
 
+/** An address kept from when the store had accounts; the admin still shows them on a customer. */
 export interface SavedAddressDTO extends AddressDTO {
   id: string;
   isDefault: boolean;
 }
-export const SavedAddressInput = AddressInput.extend({ isDefault: z.boolean().default(false) });
 
-export const WishlistAddInput = z.object({ productId: zId });
+/* ═══════════════════════ admin: the list ═══════════════════════ */
+
+/**
+ * The list is a list, nothing more: addresses gathered from the site, kept
+ * so the house can write to them one day. The shop sends them nothing — the
+ * only email it sends a shopper is the confirmation of an order.
+ */
+export interface SubscriberDTO {
+  email: string;
+  status: 'subscribed' | 'unsubscribed';
+  /** where the address came from: the newsletter field, or a checkout tick */
+  source: string;
+  createdAt: Timestamp;
+}
+
+/** GET /api/admin/newsletter */
+export interface AdminNewsletterDTO {
+  subscribers: { subscribed: number; unsubscribed: number };
+  items: SubscriberDTO[];
+  nextCursor: string | null;
+  /** the code shown to whoever joins, with what it is worth — null when none is set */
+  welcome: { code: string; offer: string | null; active: boolean } | null;
+}
+
+/**
+ * POST /api/subscribe. Nothing is emailed, so the code — when the owner has
+ * set one and it is still live — is handed over on the spot, on the page
+ * that asked for the address.
+ */
+export interface SubscribeResultDTO {
+  code: string | null;
+  /** what it is worth, in words to print: "15% off your first order" */
+  offer: string | null;
+}
+
+/** The code a new subscriber is shown; null shows none. */
+export const WelcomeCodeInput = z.object({
+  code: z.string().trim().toUpperCase().max(64).nullable().transform((v) => v || null),
+});
+export type WelcomeCodeInput = z.input<typeof WelcomeCodeInput>;
+
+export const SubscriberListQuery = z.object({
+  q: z.string().trim().max(120).optional(),
+  show: z.enum(['all', 'subscribed', 'unsubscribed']).default('subscribed'),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+export type SubscriberListQuery = z.input<typeof SubscriberListQuery>;
 
 /* ═══════════════════════ admin: auth & staff ═══════════════════════ */
 
@@ -527,7 +671,7 @@ export interface AdminSessionDTO {
   csrfToken: string;
 }
 
-export const AdminLoginInput = LoginInput;
+export const AdminLoginInput = z.object({ email: zEmail, password: z.string().min(1, 'Required').max(128) });
 export const AdminSetupInput = z.object({
   setupToken: z.string().min(1).max(200),
   email: zEmail,
@@ -622,6 +766,9 @@ export const AdminVariantInput = z.object({
   imageId: zId.nullable().default(null),
 });
 
+/** How many pieces a product's "Shop the look" can hold. */
+export const LOOK_MAX = 8;
+
 export const AdminProductInput = z
   .object({
     title: z.string().trim().min(1, 'Required').max(200),
@@ -647,8 +794,16 @@ export const AdminProductInput = z
     mediaIds: z.array(zId).max(50).default([]),
     /** manual collections this product belongs to */
     collectionIds: z.array(zId).max(100).default([]),
+    /**
+     * Shop the look: the pieces to wear with this one, in order. Left out
+     * (a CSV import), the pairing already saved is kept as it is.
+     */
+    lookProductIds: z.array(zId).max(LOOK_MAX, `Choose at most ${LOOK_MAX} pieces`).optional(),
   })
   .superRefine((p, ctx) => {
+    if (p.lookProductIds && new Set(p.lookProductIds).size !== p.lookProductIds.length) {
+      ctx.addIssue({ code: 'custom', path: ['lookProductIds'], message: 'A piece is in the look twice' });
+    }
     const seen = new Set<string>();
     p.variants.forEach((v, i) => {
       if (v.options.length !== p.options.length) {
@@ -698,9 +853,19 @@ export interface AdminProductDTO {
   variants: AdminVariantDTO[];
   media: MediaDTO[];
   collections: { id: string; title: string; type: 'manual' | 'smart' }[];
+  /** Shop the look, in order — every paired piece, including ones not on sale */
+  look: AdminLookPieceDTO[];
   publishedAt: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface AdminLookPieceDTO {
+  id: string;
+  handle: string;
+  title: string;
+  status: ProductStatus;
+  image: MediaDTO | null;
 }
 
 export const BulkProductActionInput = z.object({
@@ -713,6 +878,46 @@ export const InventoryAdjustInput = z.object({
   quantity: z.number().int().min(-1_000_000).max(1_000_000),
   note: z.string().trim().max(300).optional(),
 });
+
+/** One sellable variant on the stock screen: what it is, and what is left. */
+export interface InventoryRowDTO {
+  variantId: string;
+  productId: string;
+  productTitle: string;
+  variantTitle: string;
+  sku: string | null;
+  image: MediaDTO | null;
+  onHand: number;
+  /** held by checkouts that are open right now */
+  reserved: number;
+  tracked: boolean;
+  policy: InventoryPolicy;
+  status: ProductStatus;
+}
+
+export const InventoryListQuery = z.object({
+  q: z.string().trim().max(120).optional(),
+  /** low: at or under the store's low-stock mark · out: nothing sellable left */
+  show: z.enum(['all', 'low', 'out']).default('all'),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+
+/** Set the count on several variants at once, as the stock screen does. */
+export const InventorySetInput = z.object({
+  items: z
+    .array(
+      z.object({
+        variantId: zId,
+        onHand: z.number().int().min(0).max(1_000_000),
+        /** what the screen showed when it was opened, so a sale in between is not overwritten */
+        baseline: z.number().int().min(-1_000_000).max(1_000_000),
+      }),
+    )
+    .min(1, 'Nothing to save')
+    .max(200),
+});
+export type InventorySetInput = z.input<typeof InventorySetInput>;
 
 export interface InventoryAdjustmentDTO {
   id: string;
@@ -743,14 +948,11 @@ export const CollectionRuleInput = z.object({
   value: z.string().trim().min(1).max(120),
 });
 
+/** Every collection is a list the owner picks by hand; there are no rules to write. */
 export const AdminCollectionInput = z.object({
   title: z.string().trim().min(1).max(200),
   handle: zHandle.optional(),
   descriptionHtml: z.string().max(50_000).default(''),
-  type: z.enum(['manual', 'smart']),
-  rules: z
-    .object({ match: z.enum(['all', 'any']), conditions: z.array(CollectionRuleInput).max(20) })
-    .default({ match: 'all', conditions: [] }),
   sort: z.enum(COLLECTION_SORTS).default('manual'),
   imageId: zId.nullable().default(null),
   published: z.boolean().default(true),
@@ -768,6 +970,7 @@ export interface AdminCollectionDTO {
   rules: { match: 'all' | 'any'; conditions: { field: CollectionRuleField; op: CollectionRuleOp; value: string }[] };
   sort: CollectionSort;
   image: MediaDTO | null;
+  /** available: on the shop, and one of its categories */
   published: boolean;
   seoTitle: string | null;
   seoDescription: string | null;
@@ -777,6 +980,14 @@ export interface AdminCollectionDTO {
 
 /** PUT /api/admin/collections/:id/products (manual collections) */
 export const CollectionProductsInput = z.object({ productIds: z.array(zId).max(5000) });
+
+/** The switch on a collection row: available on the shop, or not. */
+export const CollectionFlagsInput = z.object({ published: z.boolean() });
+export type CollectionFlagsInput = z.input<typeof CollectionFlagsInput>;
+
+/** The categories, in the order the collections screen puts them. */
+export const CollectionOrderInput = z.object({ handles: z.array(zHandle).max(50) });
+export type CollectionOrderInput = z.input<typeof CollectionOrderInput>;
 
 /* ═══════════════════════ admin: orders ═══════════════════════ */
 
@@ -888,13 +1099,11 @@ export interface AdminCustomerListItemDTO {
   ordersCount: number;
   totalSpent: Money;
   acceptsMarketing: boolean;
-  hasAccount: boolean;
   createdAt: Timestamp;
   lastOrderAt: Timestamp | null;
 }
 
 export interface AdminCustomerDTO extends AdminCustomerListItemDTO {
-  emailVerified: boolean;
   note: string | null;
   averageOrderValue: Money;
   addresses: SavedAddressDTO[];
@@ -1065,8 +1274,38 @@ export interface SettingsDTO {
   checkoutHoldMinutes: number;
   abandonedCartEmails: boolean;
   orderNotificationEmail: string | null;
+  sizeChart: SizeChartDTO;
+  orderEmail: OrderEmailDTO;
   updatedAt: Timestamp;
 }
+
+/**
+ * The words of the confirmation a buyer is sent. The shop supplies the
+ * structure — what was bought, what it cost, where it is going — and the
+ * owner supplies the voice around it. Three places, because three is what a
+ * letter needs: what it says in the subject line, what it says first, and
+ * how it signs off.
+ *
+ * {{order}}, {{name}} and {{total}} stand in for the order number, the
+ * buyer's first name and what they paid.
+ */
+export interface OrderEmailDTO {
+  subject: string;
+  /** the line above the order table */
+  intro: string;
+  /** the line below it; empty for none */
+  signoff: string | null;
+}
+
+/** What the placeholders are called, for the admin to list. */
+export const ORDER_EMAIL_TOKENS = ['{{order}}', '{{name}}', '{{total}}'] as const;
+
+export const OrderEmailInput = z.object({
+  subject: z.string().trim().min(1, 'Required').max(120),
+  intro: z.string().trim().min(1, 'Required').max(600),
+  signoff: z.string().trim().max(400).nullish().transform((v) => v || null),
+});
+export type OrderEmailInput = z.input<typeof OrderEmailInput>;
 
 export const SettingsInput = z.object({
   name: z.string().trim().min(1).max(120),
@@ -1076,7 +1315,6 @@ export const SettingsInput = z.object({
   instagram: z.string().trim().max(60).nullable(),
   address: z.string().trim().max(500).nullable(),
   logoMediaId: zId.nullable(),
-  menu: z.array(z.object({ label: z.string().trim().min(1).max(40), collectionHandle: zHandle.nullable() })).max(20),
   featuredCollectionHandle: zHandle.nullable(),
   lookbookCollectionHandle: zHandle.nullable(),
   editorialCollectionHandle: zHandle.nullable(),
@@ -1084,8 +1322,120 @@ export const SettingsInput = z.object({
   checkoutHoldMinutes: z.number().int().min(0).max(120),
   abandonedCartEmails: z.boolean(),
   orderNotificationEmail: zEmail.nullable(),
+  sizeChart: SizeChartInput,
+  orderEmail: OrderEmailInput,
 });
 export type SettingsInput = z.input<typeof SettingsInput>;
+
+/** GET /api/admin/home. A floor's `image` is only the one chosen here; `fallback` is what shows without it. */
+export interface AdminHomeDTO {
+  sections: HomeSectionDTO[];
+  hero: { video: MediaDTO | null };
+  ribbon: string[];
+  maison: { heading: string; intro: string | null };
+  floors: (Omit<FloorDTO, 'image'> & { image: MediaDTO | null; fallback: MediaDTO | null })[];
+  boutique: { heading: string | null; intro: string | null };
+  accessories: { heading: string; intro: string | null };
+  journal: { heading: string; intro: string; buttonLabel: string; notebook: MediaDTO | null };
+  popups: { heading: string; intro: string | null; rows: PopUpDTO[] };
+  footer: { blurb: string; careNote: string | null };
+  updatedAt: Timestamp;
+}
+
+/** A video or a PDF the site uses, uploaded on the website management screen. */
+export interface SiteFileDTO {
+  id: string;
+  url: string;
+  /** video/mp4 or application/pdf */
+  mime: string;
+  bytes: number;
+  /** the file's name, which is also what a download is called */
+  name: string;
+}
+
+export const MAX_FLOORS = 8;
+export const MAX_RIBBON = 12;
+export const MAX_POPUPS = 12;
+
+const zHeading = z.string().trim().min(1, 'Required').max(80);
+const zLine = (max: number) => z.string().trim().max(max).nullish().transform((v) => v || null);
+
+export const HomeInput = z.object({
+  sections: z
+    .array(
+      z.object({
+        key: z.enum(HOME_SECTIONS),
+        label: z.string().trim().min(1, 'Required').max(40),
+        navLabel: z.string().trim().min(1, 'Required').max(20),
+        visible: z.boolean().default(true),
+      }),
+    )
+    .length(HOME_SECTIONS.length)
+    .refine((list) => new Set(list.map((x) => x.key)).size === list.length, 'Each section once'),
+  /** the uploaded opening film; null plays the built-in one */
+  hero: z.object({ videoMediaId: zId.nullable().default(null) }).default({ videoMediaId: null }),
+  ribbon: z.array(z.string().trim().min(1, 'Write a word or take the row out').max(40)).max(MAX_RIBBON).default([]),
+  maison: z.object({
+    heading: zHeading,
+    intro: zLine(400),
+  }),
+  boutique: z
+    .object({
+      /** empty takes the featured collection's own name */
+      heading: z.string().trim().max(80).nullish().transform((v) => v || null),
+      intro: zLine(240),
+    })
+    .default({ heading: null, intro: null }),
+  accessories: z.object({
+    heading: zHeading,
+    intro: zLine(240),
+  }),
+  journal: z
+    .object({
+      heading: zHeading,
+      intro: z.string().trim().min(1, 'Required').max(600),
+      buttonLabel: z.string().trim().min(1, 'Required').max(40),
+      /** the notebook the section's second button downloads */
+      notebookMediaId: zId.nullable().default(null),
+    })
+    .default({ heading: 'Limited quantities. *Made in Lebanon.*', intro: '', buttonLabel: 'Where to find us', notebookMediaId: null }),
+  popups: z
+    .object({
+      heading: zHeading,
+      intro: zLine(200),
+      rows: z
+        .array(
+          z.object({
+            place: z.string().trim().min(1, 'Required').max(60),
+            city: z.string().trim().max(60),
+            dates: z.string().trim().max(60),
+            time: z.string().trim().max(40),
+            status: z.enum(['open', 'past']).default('open'),
+          }),
+        )
+        .max(MAX_POPUPS)
+        .default([]),
+    })
+    .default({ heading: 'End of summer *pop-ups*', intro: null, rows: [] }),
+  footer: z
+    .object({
+      blurb: z.string().trim().min(1, 'Required').max(400),
+      careNote: zLine(200),
+    })
+    .default({ blurb: '', careNote: null }),
+  floors: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1, 'Required').max(30),
+        line: z.string().trim().max(120).nullish().transform((v) => v || null),
+        collectionHandle: zHandle.nullable(),
+        imageMediaId: zId.nullable(),
+      }),
+    )
+    .min(1, 'Add at least one floor')
+    .max(MAX_FLOORS),
+});
+export type HomeInput = z.input<typeof HomeInput>;
 
 export const PageInput = z.object({
   title: z.string().trim().min(1).max(200),
@@ -1128,12 +1478,12 @@ export interface AuditEntryDTO {
  *   GET    /api/products?…ProductListQuery             → ProductListDTO
  *   GET    /api/products/:handle                       → ProductDTO
  *   GET    /api/products/:handle/availability          → AvailabilityDTO
- *   GET    /api/products/:handle/related               → { items: ProductDTO[] }
+ *   GET    /api/products/:handle/look                  → LookDTO
  *   GET    /api/collections                            → { items: CollectionDTO[] }
  *   GET    /api/collections/:handle                    → CollectionDTO
  *   GET    /api/search/suggest?q=                      → SearchSuggestDTO
  *   GET    /api/pages/:handle                          → PageDTO
- *   POST   /api/subscribe            SubscribeInput    → 204
+ *   POST   /api/subscribe            SubscribeInput    → SubscribeResultDTO
  *
  * Cart (guest cookie or customer)
  *   GET    /api/cart                                   → CartDTO
@@ -1150,27 +1500,8 @@ export interface AuditEntryDTO {
  *   POST   /api/checkout/:id/complete CheckoutCompleteInput → { orderToken: string; order: OrderDTO }
  *   GET    /api/orders/:token                          → OrderDTO      (confirmation / guest status page)
  *
- * Auth & account
- *   GET    /api/auth/session                           → SessionDTO
- *   POST   /api/auth/register        RegisterInput     → SessionDTO
- *   POST   /api/auth/login           LoginInput        → SessionDTO
- *   POST   /api/auth/logout                            → 204
- *   POST   /api/auth/verify-email    VerifyEmailInput  → SessionDTO
- *   POST   /api/auth/resend-verification               → 204
- *   POST   /api/auth/forgot-password ForgotPasswordInput → 204
- *   POST   /api/auth/reset-password  ResetPasswordInput → SessionDTO
- *   GET    /api/account                                → CustomerDTO
- *   PATCH  /api/account              UpdateAccountInput → CustomerDTO
- *   POST   /api/account/password     ChangePasswordInput → 204
- *   GET    /api/account/orders?cursor                  → Page<OrderSummaryDTO>
- *   GET    /api/account/orders/:number                 → OrderDTO
- *   GET    /api/account/addresses                      → { items: SavedAddressDTO[] }
- *   POST   /api/account/addresses    SavedAddressInput → SavedAddressDTO
- *   PATCH  /api/account/addresses/:id SavedAddressInput → SavedAddressDTO
- *   DELETE /api/account/addresses/:id                  → 204
- *   GET    /api/account/wishlist                       → { items: ProductDTO[] }
- *   POST   /api/account/wishlist     WishlistAddInput  → 204
- *   DELETE /api/account/wishlist/:productId            → 204
+ * Session (no customer accounts — guests only)
+ *   GET    /api/auth/session                           → SessionDTO    (the CSRF token)
  *
  * Admin (staff session; permission in brackets)
  *   GET    /api/admin/auth/session                     → AdminSessionDTO
@@ -1192,6 +1523,8 @@ export interface AuditEntryDTO {
  *   GET    /api/admin/imports/:id                      → CsvImportDTO             [products:read]
  *   POST   /api/admin/variants/:id/inventory InventoryAdjustInput → AdminVariantDTO [products:write]
  *   GET    /api/admin/variants/:id/inventory           → { items: InventoryAdjustmentDTO[] } [products:read]
+ *   GET    /api/admin/inventory?…InventoryListQuery    → Page<InventoryRowDTO>    [products:read]
+ *   POST   /api/admin/inventory      InventorySetInput → { items: InventoryRowDTO[] } [products:write]
  *   GET    /api/admin/media?cursor                     → Page<MediaDTO>           [products:read]
  *   POST   /api/admin/media          multipart "files" (≤20, ≤10MB each) → { items: MediaDTO[] } [products:write]
  *   PATCH  /api/admin/media/:id      MediaUpdateInput  → MediaDTO                 [products:write]
@@ -1201,6 +1534,8 @@ export interface AuditEntryDTO {
  *   GET    /api/admin/collections/:id                  → AdminCollectionDTO & { products: AdminProductListItemDTO[] }
  *   PUT    /api/admin/collections/:id AdminCollectionInput → AdminCollectionDTO   [products:write]
  *   PUT    /api/admin/collections/:id/products CollectionProductsInput → 204      [products:write]
+ *   PATCH  /api/admin/collections/:id CollectionFlagsInput → AdminCollectionDTO     [products:write]
+ *   PUT    /api/admin/collections/order CollectionOrderInput → 204                  [products:write]
  *   DELETE /api/admin/collections/:id                  → 204                      [products:write]
  *   GET    /api/admin/orders?…AdminOrderListQuery      → Page<AdminOrderListItemDTO> [orders:read]
  *   GET    /api/admin/orders/:id                       → AdminOrderDTO            [orders:read]
@@ -1230,6 +1565,12 @@ export interface AuditEntryDTO {
  *   DELETE /api/admin/taxes/rates/:id                  → 204                      [taxes:write]
  *   GET    /api/admin/settings                         → SettingsDTO              [settings:write]
  *   PUT    /api/admin/settings       SettingsInput     → SettingsDTO              [settings:write]
+ *   POST   /api/admin/settings/order-email/test        → 204                      [settings:write]
+ *   GET    /api/admin/newsletter     SubscriberListQuery → AdminNewsletterDTO     [settings:write]
+ *   PUT    /api/admin/newsletter/code WelcomeCodeInput  → AdminNewsletterDTO       [settings:write]
+ *   GET    /api/admin/home                             → AdminHomeDTO             [settings:write]
+ *   PUT    /api/admin/home           HomeInput         → AdminHomeDTO             [settings:write]
+ *   POST   /api/admin/site-files     multipart (one mp4 or pdf) → SiteFileDTO      [settings:write]
  *   GET    /api/admin/pages                            → { items: AdminPageDTO[] } [pages:write]
  *   POST   /api/admin/pages          PageInput         → AdminPageDTO             [pages:write]
  *   GET    /api/admin/pages/:id                        → AdminPageDTO             [pages:write]

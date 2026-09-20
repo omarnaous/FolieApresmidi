@@ -1,17 +1,15 @@
 import React from 'react';
-import { Link } from 'react-router';
 import { FEED, post } from '../data/assets';
 import { useCart } from '../store/cart';
-import { SECTIONS } from '../data/sections';
+import { useSections } from '../data/sections';
 import { useStore } from '../lib/queries';
 import { instagramHandle } from '../lib/store';
-
-const LINKS = SECTIONS.map((s) => [s.label, s.href]);
 
 const STRIP = FEED.slice(0, 3);
 
 export default function MobileMenu({ open, onClose, onAll }) {
   const { count, openCart } = useCart();
+  const LINKS = useSections().map((s) => [s.label, s.href]);
   const { data: store } = useStore();
   const ig = instagramHandle(store?.contact.instagram);
   const email = store?.contact.email;
@@ -48,19 +46,13 @@ export default function MobileMenu({ open, onClose, onAll }) {
         >
           Bag {count > 0 && <sup className="menu-count">{count}</sup>}
         </button>
-        <Link
-          to="/account"
-          onClick={onClose}
-          style={{ transitionDelay: `${160 + (LINKS.length + 2) * 55}ms` }}
-        >
-          Account
-        </Link>
       </nav>
 
       <div className="menu-strip">
         {STRIP.map((f) => (
           <a key={f.code} href={post(f.code)} target="_blank" rel="noreferrer noopener" aria-label={f.label}>
-            <img src={f.src} alt={f.label} loading="lazy" />
+            <img
+              decoding="async" src={f.src} alt={f.label} loading="lazy" />
           </a>
         ))}
       </div>

@@ -26,10 +26,12 @@
     "run_worker_first": [
       "/api/*",
       "/media/*",
+      "/film/*",
       "/products/*",
       "/collections/*",
       "/pages/*",
       "/cart/recover/*",
+      "/unsubscribe/*",
       "/sitemap.xml",
       "/robots.txt"
     ]
@@ -50,7 +52,7 @@
     "APP_ENV": "development",
     "APP_URL": "http://localhost:5173",
     "ALLOWED_ORIGINS": "http://localhost:5173,http://localhost:8787",
-    "EMAIL_FROM": "Follies d'Après-Midi <orders@localhost>",
+    "EMAIL_FROM": "Follies d'Après-Midi <onboarding@resend.dev>",
     "PASSWORD_ITERATIONS": "100000"
   },
   "secrets": { "required": ["PASSWORD_PEPPER", "COOKIE_SECRET", "SETUP_TOKEN", "RESEND_API_KEY"] },

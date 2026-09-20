@@ -39,6 +39,7 @@ export async function abandonedCarts(env: Env): Promise<void> {
   const { results } = await env.DB.prepare(
     `SELECT c.id FROM carts c
       WHERE c.status = 'active' AND c.email IS NOT NULL AND c.reminder_sent_at IS NULL
+        AND c.customer_id IS NULL
         AND c.updated_at BETWEEN ? AND ?
         AND EXISTS (SELECT 1 FROM cart_lines l WHERE l.cart_id = c.id)
       ORDER BY c.updated_at LIMIT 200`,

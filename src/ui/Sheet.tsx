@@ -1,5 +1,6 @@
 /**
- * The full-page sheet the checkout drew first — one scroller, its own bar —
+ * The full-page sheet the checkout drew first — one scroller under the site
+ * bar, with its own slim bar for Back and Close —
  * shared by the order confirmation, the account and the policy pages.
  */
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -32,7 +33,6 @@ export function Sheet({ open, label, onClose, back = 'Boutique', children }: She
     <div
       className={`co ${open ? 'on' : ''}`}
       role="dialog"
-      aria-modal="true"
       aria-label={label}
       aria-hidden={!open}
       tabIndex={-1}
@@ -43,7 +43,6 @@ export function Sheet({ open, label, onClose, back = 'Boutique', children }: She
         <button className="co-back label" onClick={onClose}>
           <span aria-hidden="true">←</span> {back}
         </button>
-        <span className="co-mark">FDM</span>
         <button className="co-x label" onClick={onClose} aria-label="Close">Close</button>
       </header>
       {children}

@@ -66,8 +66,7 @@ cat <<'EOF'
   https://fdm-preview.follies.workers.dev/admin
 
   owner     owner@fdm.test     / fdm-owner-local-2026
-  customer  customer@fdm.test  / fdm-customer-local-2026
-  codes     WELCOME10  TWENTYOFF  FREESHIP  JEWELLERY3FOR2
+  codes     WELCOME10  NEWSLETTER15  TWENTYOFF  FREESHIP  JEWELLERY3FOR2
 
   No image uploads (no R2), jobs run inline (no Queues), full-size images
   (no Images binding), and passwords hash at 1/10th strength. Preview only.

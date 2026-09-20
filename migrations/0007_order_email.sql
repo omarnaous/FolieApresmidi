@@ -1,0 +1,1 @@
+ALTER TABLE `store_settings` ADD `order_email_json` text DEFAULT '{}' NOT NULL;

@@ -1,14 +1,16 @@
 import { Hono } from 'hono';
-import { ProductListQuery, SubscribeInput, type CollectionDTO, type PageDTO, type StoreDTO } from '../../shared/api';
+import { ProductListQuery, SubscribeInput, type CollectionDTO, type MenuItemDTO, type PageDTO, type StoreDTO, type SubscribeResultDTO } from '../../shared/api';
 import { cacheTagHeader, PUBLIC_CACHE, TAGS } from '../lib/cache';
 import { notFound } from '../lib/errors';
 import { json, query } from '../lib/validate';
 import { clientIp, limit } from '../middleware/rate-limit';
 import { paymentMethods } from '../payments/registry';
-import { availability, collectionDTO, decodeCursor, listProducts, parseOptionFilters, productByHandle, relatedProducts, suggest } from '../services/catalog';
+import { availability, collectionDTO, decodeCursor, listProducts, parseOptionFilters, productByHandle, shopTheLook, suggest } from '../services/catalog';
 import { shipsTo } from '../services/checkout';
+import { homeDTO, readHome } from '../services/home';
+import { offerPhrase } from '../services/newsletter';
 import { mediaById } from '../services/media';
-import { getSettings } from '../services/settings';
+import { getSettings, readSizeChart } from '../services/settings';
 import type { AppEnv } from '../types';
 import { schema } from '../db/client';
 import { and, asc, eq } from 'drizzle-orm';
@@ -26,13 +28,29 @@ store.get('/store', async (c) => {
     .where(and(eq(schema.pages.kind, 'policy'), eq(schema.pages.published, true)))
     .orderBy(asc(schema.pages.title))
     .all();
+
+  /* The categories are the available collections, named after themselves and
+     in the order the collections screen set; anything the owner has not
+     ordered yet falls in alphabetically at the end. "All" always stands first. */
+  const live = await db
+    .select({ handle: schema.collections.handle, title: schema.collections.title })
+    .from(schema.collections)
+    .where(eq(schema.collections.published, true))
+    .all();
+  const order = new Map(s.menu.flatMap((m, i) => (m.collectionHandle ? [[m.collectionHandle, i] as const] : [])));
+  const menu: MenuItemDTO[] = [
+    { label: 'All', collectionHandle: null },
+    ...live
+      .sort((a, b) => (order.get(a.handle) ?? 999) - (order.get(b.handle) ?? 999) || a.title.localeCompare(b.title))
+      .map((cl) => ({ label: cl.title, collectionHandle: cl.handle })),
+  ];
   const body: StoreDTO = {
     name: s.name,
     currency: s.currency,
     pricesIncludeTax: s.pricesIncludeTax,
     contact: { email: s.contactEmail, phone: s.contactPhone, instagram: s.instagram },
     logo: s.logoMediaId ? await mediaById(db, s.logoMediaId) : null,
-    menu: s.menu,
+    menu,
     featuredCollectionHandle: s.featuredCollectionHandle,
     lookbookCollectionHandle: s.lookbookCollectionHandle,
     editorialCollectionHandle: s.editorialCollectionHandle,
@@ -40,6 +58,9 @@ store.get('/store', async (c) => {
     paymentMethods: paymentMethods(c.env),
     shipsTo: await shipsTo(c.env.DB),
     lowStockThreshold: s.lowStockThreshold,
+    home: await homeDTO(c.env.DB, readHome(s.homeJson)),
+    sizeChart: readSizeChart(s.sizeChartJson),
+    newsletterOffer: await offerPhrase(c.env.DB, s.newsletterWelcomeCode, s.currency),
   };
   return c.json(body, 200, publicHeaders(TAGS.collections));
 });
@@ -76,11 +97,12 @@ store.get('/products/:handle/availability', async (c) => {
   return c.json(await availability(db, product, settings.lowStockThreshold), 200, { 'cache-control': 'no-store' });
 });
 
-store.get('/products/:handle/related', async (c) => {
+store.get('/products/:handle/look', async (c) => {
   const db = c.get('db');
   const product = await productByHandle(db, c.req.param('handle'));
   if (!product) throw notFound('That piece is not in the boutique');
-  return c.json({ items: await relatedProducts(db, product) }, 200, publicHeaders(TAGS.products));
+  // tagged with every product: a paired piece changing changes this answer too
+  return c.json(await shopTheLook(db, product), 200, publicHeaders(TAGS.products));
 });
 
 store.get('/collections', async (c) => {
@@ -138,5 +160,12 @@ store.post('/subscribe', json(SubscribeInput), async (c) => {
   )
     .bind(email, email, now, now)
     .run();
-  return c.body(null, 204);
+
+  /* Nothing is emailed for joining, so what joining is worth is handed back
+     here, to the page that asked for the address. A code the owner has not
+     set — or has since switched off — is worth nothing and is not shown. */
+  const s = await getSettings(c.get('db'));
+  const offer = await offerPhrase(c.env.DB, s.newsletterWelcomeCode, s.currency);
+  const body: SubscribeResultDTO = { code: offer ? s.newsletterWelcomeCode : null, offer };
+  return c.json(body);
 });

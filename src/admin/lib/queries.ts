@@ -3,6 +3,7 @@ import {
   formatMoney,
   get,
   type AdminCollectionDTO,
+  type AdminHomeDTO,
   type AdminCustomerDTO,
   type AdminOrderDTO,
   type AdminPageDTO,
@@ -18,7 +19,6 @@ import {
   type ShippingZoneDTO,
   type StaffDTO,
   type StoreDTO,
-  type TaxSettingsDTO,
 } from './contract';
 
 export const qk = {
@@ -44,12 +44,11 @@ export const qk = {
   discounts: ['admin', 'discounts'] as const,
   discount: (id: string) => ['admin', 'discounts', 'detail', id] as const,
   shipping: ['admin', 'shipping'] as const,
-  taxes: ['admin', 'taxes'] as const,
   settings: ['admin', 'settings'] as const,
+  home: ['admin', 'home'] as const,
   pages: ['admin', 'pages'] as const,
   page: (id: string) => ['admin', 'pages', 'detail', id] as const,
   staff: ['admin', 'staff'] as const,
-  audit: ['admin', 'audit'] as const,
 };
 
 export const useSession = () =>
@@ -154,11 +153,11 @@ export const useShippingZones = () =>
     select: (d) => d.items,
   });
 
-export const useTaxes = () =>
-  useQuery({ queryKey: qk.taxes, queryFn: ({ signal }) => get<TaxSettingsDTO>('/api/admin/taxes', undefined, signal) });
-
 export const useSettings = () =>
   useQuery({ queryKey: qk.settings, queryFn: ({ signal }) => get<SettingsDTO>('/api/admin/settings', undefined, signal) });
+
+export const useHome = () =>
+  useQuery({ queryKey: qk.home, queryFn: ({ signal }) => get<AdminHomeDTO>('/api/admin/home', undefined, signal) });
 
 export const usePages = () =>
   useQuery({

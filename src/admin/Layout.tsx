@@ -11,17 +11,18 @@ import { useToast } from './ui/Toasts';
 
 export const NAV: { to: string; label: string; perm: Permission }[] = [
   { to: '/admin', label: 'Dashboard', perm: 'dashboard:read' },
-  { to: '/admin/orders', label: 'Orders', perm: 'orders:read' },
-  { to: '/admin/products', label: 'Products', perm: 'products:read' },
+  // the whole site — how it looks, what it says, and what the shop is called
+  { to: '/admin/website', label: 'Website design', perm: 'settings:write' },
   { to: '/admin/collections', label: 'Collections', perm: 'products:read' },
-  { to: '/admin/customers', label: 'Customers', perm: 'customers:read' },
+  { to: '/admin/products', label: 'Products', perm: 'products:read' },
+  { to: '/admin/inventory', label: 'Inventory', perm: 'products:read' },
   { to: '/admin/discounts', label: 'Discounts', perm: 'discounts:read' },
+  { to: '/admin/orders', label: 'Orders', perm: 'orders:read' },
+  { to: '/admin/customers', label: 'Customers', perm: 'customers:read' },
   { to: '/admin/shipping', label: 'Shipping', perm: 'shipping:write' },
-  { to: '/admin/taxes', label: 'Taxes', perm: 'taxes:write' },
   { to: '/admin/pages', label: 'Pages', perm: 'pages:write' },
-  { to: '/admin/settings', label: 'Settings', perm: 'settings:write' },
+  { to: '/admin/newsletter', label: 'Newsletter', perm: 'settings:write' },
   { to: '/admin/staff', label: 'Staff', perm: 'staff:manage' },
-  { to: '/admin/audit', label: 'Audit log', perm: 'staff:manage' },
 ];
 
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', staff: 'Staff' } as const;

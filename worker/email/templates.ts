@@ -1,4 +1,4 @@
-import type { AddressDTO, OrderDTO } from '../../shared/api';
+import type { AddressDTO, OrderDTO, OrderEmailDTO } from '../../shared/api';
 import { formatMoney } from '../../shared/money';
 
 export interface Email {
@@ -68,31 +68,50 @@ function orderTable(order: OrderDTO): string {
 <tr><td style="padding:12px 0;font-weight:600">Total</td><td align="right" style="padding:12px 0;font-weight:600">${m(p.total)}</td></tr></table>`;
 }
 
-export function orderConfirmation(store: StoreBrand, order: OrderDTO, statusUrl: string): Email {
+/**
+ * The owner's words, with the three things they can name filled in. Anything
+ * they did not write is simply absent — a shop that leaves the sign-off empty
+ * sends no sign-off rather than an empty paragraph.
+ */
+export function fillOrderTokens(text: string, order: OrderDTO): string {
+  const first = order.shippingAddress?.name.split(' ')[0] ?? '';
+  return text
+    .replaceAll('{{order}}', order.name)
+    .replaceAll('{{name}}', first || 'there')
+    .replaceAll('{{total}}', formatMoney(order.pricing.total, order.currency));
+}
+
+export function orderConfirmation(store: StoreBrand, order: OrderDTO, statusUrl: string | null, copy: OrderEmailDTO): Email {
   const first = order.shippingAddress?.name.split(' ')[0] ?? '';
   const addr = addressLines(order.shippingAddress);
-  const body = `<p>We have your order ${escapeHtml(order.name)}. You are paying by ${escapeHtml(order.paymentMethod.name.toLowerCase())}; we will call to confirm before it ships.</p>
+  const intro = fillOrderTokens(copy.intro, order);
+  const signoff = copy.signoff ? fillOrderTokens(copy.signoff, order) : '';
+  const body = `<p>${escapeHtml(intro)}</p>
 ${orderTable(order)}
 ${addr.length ? `<p style="margin:0 0 6px;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:${ASH}">Delivering to</p><p style="margin:0">${addr.map(escapeHtml).join('<br>')}</p>` : ''}
-${button(statusUrl, 'View your order')}`;
+${statusUrl ? button(statusUrl, 'View your order') : ''}${signoff ? `<p>${escapeHtml(signoff)}</p>` : ''}`;
   const text = [
     `Merci${first ? `, ${first}` : ''}.`,
-    `We have your order ${order.name}. Paying by ${order.paymentMethod.name}.`,
+    intro,
     '',
     ...order.lines.map((l) => `${l.quantity} × ${l.title}${l.variantTitle ? ` (${l.variantTitle})` : ''} — ${formatMoney(l.total, order.currency)}`),
     '',
     `Total: ${formatMoney(order.pricing.total, order.currency)}`,
     addr.length ? `\nDelivering to:\n${addr.join('\n')}` : '',
-    `\nView your order: ${statusUrl}`,
+    statusUrl ? `\nView your order: ${statusUrl}` : '',
   ].join('\n');
-  return { subject: `Order ${order.name} confirmed — ${store.name}`, html: layout(store, `Merci${first ? `, ${first}` : ''}.`, body, `Order ${order.name} is confirmed`), text };
+  return {
+    subject: fillOrderTokens(copy.subject, order),
+    html: layout(store, `Merci${first ? `, ${first}` : ''}.`, body, `Order ${order.name} is confirmed`),
+    text,
+  };
 }
 
 export function orderStatusUpdate(
   store: StoreBrand,
   order: OrderDTO,
   status: 'shipped' | 'delivered' | 'cancelled' | 'refunded',
-  statusUrl: string,
+  statusUrl: string | null,
   refundAmount?: number,
 ): Email {
   const f = order.fulfillments.at(-1);
@@ -113,8 +132,8 @@ export function orderStatusUpdate(
     },
   }[status];
   const tracking = status === 'shipped' && f?.trackingUrl ? button(f.trackingUrl, 'Track the parcel') : '';
-  const body = `<p>${copy.lead}</p>${tracking}${button(statusUrl, 'View your order')}`;
-  const text = `${copy.title}\n\n${copy.lead.replace(/<[^>]+>/g, '')}\n${f?.trackingUrl && status === 'shipped' ? `\nTrack: ${f.trackingUrl}` : ''}\nView your order: ${statusUrl}`;
+  const body = `<p>${copy.lead}</p>${tracking}${statusUrl ? button(statusUrl, 'View your order') : ''}`;
+  const text = `${copy.title}\n\n${copy.lead.replace(/<[^>]+>/g, '')}\n${f?.trackingUrl && status === 'shipped' ? `\nTrack: ${f.trackingUrl}` : ''}${statusUrl ? `\nView your order: ${statusUrl}` : ''}`;
   return { subject: copy.subject, html: layout(store, copy.title, body, copy.subject), text };
 }
 
@@ -127,10 +146,18 @@ export function newOrderAlert(store: StoreBrand, order: OrderDTO, adminUrl: stri
   };
 }
 
-export function verifyEmail(store: StoreBrand, name: string, url: string): Email {
-  const title = `Welcome${name ? `, ${name.split(' ')[0]}` : ''}.`;
-  const body = `<p>Confirm your email address to finish setting up your account.</p>${button(url, 'Confirm email')}<p>${muted('This link expires in 24 hours. If you did not create an account, ignore this email.')}</p>`;
-  return { subject: `Confirm your email — ${store.name}`, html: layout(store, title, body, 'Confirm your email address'), text: `${title}\n\nConfirm your email: ${url}\n\nThis link expires in 24 hours.` };
+/**
+ * What the Send a test button posts. It says nothing an order would say —
+ * the point is only that mail reaches this address, and that whoever reads
+ * it knows why it arrived.
+ */
+export function orderEmailTest(store: StoreBrand, adminUrl: string): Email {
+  const body = `<p>This is where new orders will arrive. Every order placed at ${escapeHtml(store.name)} sends one of these the moment it is placed — what was bought, who it is for, and a way straight to it.</p>${button(adminUrl, 'Open the orders')}<p>${muted('Nothing was ordered. This was sent from your admin, to the address saved under Order emails.')}</p>`;
+  return {
+    subject: `Order emails are working — ${store.name}`,
+    html: layout(store, 'Orders will arrive here.', body, 'A test from your admin'),
+    text: `This is where new orders will arrive.\n\nEvery order placed at ${store.name} sends one of these.\n${adminUrl}\n\nNothing was ordered — this is a test from your admin.`,
+  };
 }
 
 export function passwordReset(store: StoreBrand, name: string, url: string): Email {
@@ -162,3 +189,4 @@ export function abandonedCart(
 }
 
 export { TERRA };
+

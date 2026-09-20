@@ -12,46 +12,74 @@ import { qk, useSession } from './lib/queries';
 import { StaffProvider, useCan } from './lib/session';
 import { AdminLayout, NAV } from './Layout';
 import { AcceptInvitePage, AuthShell, ForgotPasswordPage, LoginPage, ResetPasswordPage, SetupPage } from './pages/Auth';
-import AuditPage from './pages/Audit';
 import CollectionEditor from './pages/collections/CollectionEditor';
 import CollectionsList from './pages/collections/CollectionsList';
 import CustomerDetail from './pages/customers/CustomerDetail';
 import CustomersList from './pages/customers/CustomersList';
 import Dashboard from './pages/Dashboard';
+import WebsiteHome from './pages/website/Home';
+import WebsiteStore from './pages/website/Store';
 import DiscountEditor from './pages/discounts/DiscountEditor';
 import DiscountsList from './pages/discounts/DiscountsList';
+import InventoryPage from './pages/Inventory';
+import NewsletterPage from './pages/Newsletter';
 import OrderDetail from './pages/orders/OrderDetail';
 import OrdersList from './pages/orders/OrdersList';
 import PageEditor from './pages/content/PageEditor';
 import PagesList from './pages/content/PagesList';
 import ProductEditor from './pages/products/ProductEditor';
 import ProductsList from './pages/products/ProductsList';
-import SettingsPage from './pages/Settings';
 import ShippingPage from './pages/Shipping';
 import StaffPage from './pages/Staff';
-import TaxesPage from './pages/Taxes';
 import { ButtonLink, Spinner } from './ui/Button';
 import { EmptyState, ErrorBanner, Forbidden } from './ui/feedback';
-import { ToastProvider } from './ui/Toasts';
+import { ToastProvider, useToast } from './ui/Toasts';
 
 export default function AdminApp() {
   const qc = useQueryClient();
 
-  // Admin-wide query defaults (the client itself belongs to the app shell).
+  /* Admin-wide query defaults (the client itself belongs to the app shell).
+     The storefront does not refetch when a tab is focused — a shopper's page
+     has no reason to change under them. An admin does: the shop is being run
+     from it, and often from more than one screen. Coming back to a tab that
+     has been open for an hour and being shown what was true an hour ago is
+     how you end up editing something that is no longer there. */
   useState(() => {
     qc.setQueryDefaults(qk.root, {
       staleTime: 30_000,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
       retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
     });
     return null;
   });
 
-  // Any 401 while signed in → the session expired or was revoked: re-check it,
-  // which swaps the app for the login screen.
+  return (
+    <div className="adm">
+      <ToastProvider>
+        <SessionWatch />
+        <Gate />
+      </ToastProvider>
+    </div>
+  );
+}
+
+/**
+ * A 401 under any request means the session has expired or been revoked.
+ * The app then swaps itself for the login screen — which, in the middle of
+ * saving something, looks exactly like a save that did nothing. So it says
+ * what happened, and says it inside the toast area, where the login screen
+ * can still show it.
+ */
+function SessionWatch() {
+  const qc = useQueryClient();
+  const toast = useToast();
+
   useEffect(() => {
     const onError = (err: unknown) => {
       if (!(err instanceof ApiError) || err.status !== 401) return;
       if (!qc.getQueryData<AdminSessionDTO>(qk.session)?.staff) return;
+      toast.error('Your session expired, so that was not saved. Sign in and try again.');
       void qc.invalidateQueries({ queryKey: qk.session });
     };
     const offQueries = qc.getQueryCache().subscribe((event) => {
@@ -64,15 +92,9 @@ export default function AdminApp() {
       offQueries();
       offMutations();
     };
-  }, [qc]);
+  }, [qc, toast]);
 
-  return (
-    <div className="adm">
-      <ToastProvider>
-        <Gate />
-      </ToastProvider>
-    </div>
-  );
+  return null;
 }
 
 function Gate() {
@@ -123,6 +145,7 @@ function Gate() {
           <Route path="products" element={<Guard perm="products:read"><ProductsList /></Guard>} />
           <Route path="products/new" element={<Guard perm="products:write"><ProductEditor /></Guard>} />
           <Route path="products/:id" element={<Guard perm="products:read"><ProductEditor /></Guard>} />
+          <Route path="inventory" element={<Guard perm="products:read"><InventoryPage /></Guard>} />
           <Route path="collections" element={<Guard perm="products:read"><CollectionsList /></Guard>} />
           <Route path="collections/new" element={<Guard perm="products:write"><CollectionEditor /></Guard>} />
           <Route path="collections/:id" element={<Guard perm="products:read"><CollectionEditor /></Guard>} />
@@ -132,13 +155,22 @@ function Gate() {
           <Route path="discounts/new" element={<Guard perm="discounts:write"><DiscountEditor /></Guard>} />
           <Route path="discounts/:id" element={<Guard perm="discounts:read"><DiscountEditor /></Guard>} />
           <Route path="shipping" element={<Guard perm="shipping:write"><ShippingPage /></Guard>} />
-          <Route path="taxes" element={<Guard perm="taxes:write"><TaxesPage /></Guard>} />
+          <Route path="website" element={<Guard perm="settings:write"><WebsiteHome /></Guard>} />
+          <Route path="website/store" element={<Guard perm="settings:write"><WebsiteStore /></Guard>} />
+          {/* the screen was called Home page before it grew into the whole site, and
+              the store's own details were a Settings tab until they moved in with it */}
+          <Route path="home" element={<Navigate to="/admin/website" replace />} />
+          <Route path="settings" element={<Navigate to="/admin/website/store" replace />} />
+          {/* taxes and the audit log are off the menu; their old links land on the dashboard.
+              Tax is still applied at checkout from the rates already saved, and every staff
+              action is still recorded — only the screens are gone. */}
+          <Route path="taxes" element={<Navigate to="/admin" replace />} />
+          <Route path="audit" element={<Navigate to="/admin" replace />} />
           <Route path="pages" element={<Guard perm="pages:write"><PagesList /></Guard>} />
           <Route path="pages/new" element={<Guard perm="pages:write"><PageEditor /></Guard>} />
           <Route path="pages/:id" element={<Guard perm="pages:write"><PageEditor /></Guard>} />
-          <Route path="settings" element={<Guard perm="settings:write"><SettingsPage /></Guard>} />
+          <Route path="newsletter" element={<Guard perm="settings:write"><NewsletterPage /></Guard>} />
           <Route path="staff" element={<Guard perm="staff:manage"><StaffPage /></Guard>} />
-          <Route path="audit" element={<Guard perm="staff:manage"><AuditPage /></Guard>} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

@@ -1,0 +1,1 @@
+ALTER TABLE `subscribers` ADD `welcome_sent_at` integer;

@@ -8,11 +8,10 @@ import { ulid } from '../lib/ids';
 import { errorFields, log } from '../lib/log';
 import type { AppEnv } from '../types';
 
-/** Request id, database handle, and principals reset for this request. */
+/** Request id, database handle, and the staff principal reset for this request. */
 export const context = createMiddleware<AppEnv>(async (c, next) => {
   c.set('requestId', c.req.header('cf-ray') ?? ulid());
   c.set('db', createDb(c.env.DB));
-  c.set('customer', null);
   c.set('staff', null);
   await next();
   c.header('x-request-id', c.get('requestId'));

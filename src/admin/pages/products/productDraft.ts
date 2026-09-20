@@ -1,4 +1,4 @@
-import { AdminProductInput, type AdminProductDTO, type InventoryPolicy, type MediaDTO, type ProductStatus } from '../../lib/contract';
+import { AdminProductInput, type AdminLookPieceDTO, type AdminProductDTO, type InventoryPolicy, type MediaDTO, type ProductStatus } from '../../lib/contract';
 import { validate, type FieldErrors } from '../../lib/forms';
 import { cartesian, clientKey } from '../../lib/util';
 
@@ -47,6 +47,8 @@ export interface ProductDraft {
   variants: VariantDraft[];
   media: MediaDTO[];
   collectionIds: string[];
+  /** Shop the look, in order */
+  look: AdminLookPieceDTO[];
 }
 
 export const isColourOption = (name: string) => /^colou?r$/i.test(name.trim());
@@ -88,6 +90,7 @@ export const emptyDraft = (): ProductDraft => ({
   variants: [newVariant([])],
   media: [],
   collectionIds: [],
+  look: [],
 });
 
 export function fromDTO(p: AdminProductDTO): ProductDraft {
@@ -123,6 +126,7 @@ export function fromDTO(p: AdminProductDTO): ProductDraft {
     })),
     media: p.media,
     collectionIds: p.collections.filter((c) => c.type === 'manual').map((c) => c.id),
+    look: p.look,
   };
 }
 
@@ -213,6 +217,7 @@ export function buildPayload(d: ProductDraft): { payload: AdminProductInput; err
     })),
     mediaIds: d.media.map((m) => m.id),
     collectionIds: d.collectionIds,
+    lookProductIds: d.look.map((p) => p.id),
   };
   return { payload, errors: { ...(validate(AdminProductInput, payload) ?? {}), ...errors } };
 }

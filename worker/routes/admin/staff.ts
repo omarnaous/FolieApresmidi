@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { StaffInviteInput, StaffUpdateInput, type AuditEntryDTO, type Page, type StaffInviteResultDTO } from '../../../shared/api';
+import { StaffInviteInput, StaffUpdateInput, type AuditEntryDTO, type Page, type Permission, type StaffInviteResultDTO } from '../../../shared/api';
 import { enqueue } from '../../jobs/messages';
 import { conflict, forbidden, notFound } from '../../lib/errors';
 import { ulid } from '../../lib/ids';
@@ -23,6 +23,20 @@ function assertCanManage(actor: StaffPrincipal, target: Pick<StaffRow, 'id' | 'r
   if ((target.role === 'admin' || nextRole === 'admin') && actor.role !== 'owner') throw forbidden('Only the owner can manage admins');
 }
 
+/**
+ * Nobody hands out authority they do not hold themselves. Without this, the
+ * one permission needed to invite staff was the only one worth having: a
+ * member allowed to manage the team could invite a second account carrying
+ * every permission — refunds, discounts, the customer list — accept their own
+ * invitation, and walk back in with all of it. The owner and admins already
+ * hold everything, so the check only bites on staff.
+ */
+function assertCanGrant(actor: StaffPrincipal, permissions: Permission[] | undefined) {
+  if (actor.role === 'owner' || actor.role === 'admin') return;
+  const beyond = (permissions ?? []).filter((p) => !actor.permissions.includes(p));
+  if (beyond.length) throw forbidden(`You cannot give out permissions you do not have yourself: ${beyond.join(', ')}`);
+}
+
 adminStaff.get('/staff', staffOnly('staff:manage'), async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT * FROM staff_users ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, name`).all<StaffRow>();
   return c.json({ items: results.map(staffDTO) });
@@ -32,6 +46,7 @@ adminStaff.post('/staff/invite', staffOnly('staff:manage'), json(StaffInviteInpu
   const actor = c.get('staff')!;
   const input = c.req.valid('json');
   if (input.role === 'admin' && actor.role !== 'owner') throw forbidden('Only the owner can invite admins');
+  assertCanGrant(actor, input.role === 'staff' ? input.permissions : undefined);
   const d1 = c.env.DB;
   if (await d1.prepare('SELECT id FROM staff_users WHERE email = ?').bind(input.email).first()) throw conflict('Someone with this email is already on the team');
 
@@ -52,8 +67,11 @@ adminStaff.post('/staff/invite', staffOnly('staff:manage'), json(StaffInviteInpu
   const row = (await d1.prepare('SELECT * FROM staff_users WHERE id = ?').bind(id).first<StaffRow>())!;
   const body: StaffInviteResultDTO = {
     staff: staffDTO(row),
-    // without a mail provider (local development) the link is shown instead of sent
-    inviteUrl: c.env.APP_ENV === 'development' || !c.env.RESEND_API_KEY ? url : null,
+    /* The link is a live credential — whoever holds it sets the password and
+       is signed in. It goes back over the wire in development only, where
+       there is no mail provider to carry it. A deployed shop with no mail
+       configured shows nothing rather than handing the token to the caller. */
+    inviteUrl: c.env.APP_ENV === 'development' ? url : null,
   };
   return c.json(body, 201);
 });
@@ -66,6 +84,7 @@ adminStaff.patch('/staff/:id', staffOnly('staff:manage'), json(StaffUpdateInput)
   if (!target) throw notFound('Staff member not found');
   const input = c.req.valid('json');
   assertCanManage(actor, target, input.role);
+  assertCanGrant(actor, input.permissions);
 
   const role = input.role ?? target.role;
   const disabling = input.status === 'disabled' && target.status !== 'disabled';

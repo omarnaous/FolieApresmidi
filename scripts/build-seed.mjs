@@ -10,9 +10,10 @@
  *                   exchange policy, a Lebanon shipping zone and store settings.
  *                   Safe for any environment; re-running never overwrites edits.
  *
- * seed/dev.sql      local-only demo data: an owner and a customer account with
- *                   known passwords, discount codes and a month of orders so the
- *                   dashboard has something to show. Never apply it remotely.
+ * seed/dev.sql      local-only demo data: an owner account with a known
+ *                   password, a guest customer with a month of orders so the
+ *                   dashboard has something to show, and discount codes. The
+ *                   store has no customer accounts. Never apply it remotely.
  *
  * Images are not copied here: each media row keeps the store's CDN URL and the
  * Worker moves it into R2 the first time it is requested.
@@ -135,7 +136,7 @@ SELECT p.id, p.title, p.description_text,
 add(`UPDATE store_settings SET name = ${q("Follies d'Après-Midi")}, currency = 'USD', prices_include_tax = 1,
   contact_email = 'folliesdapresmidi@gmail.com', instagram = 'folliesdapresmidi', address = 'Beirut, Lebanon',
   menu_json = ${q(JSON.stringify(menu))}, featured_collection_handle = 'echappee-4-a-7', lookbook_collection_handle = 'lookbook',
-  editorial_collection_handle = 'editorial', low_stock_threshold = 3, checkout_hold_minutes = 15, abandoned_cart_emails = 1, updated_at = ${NOW}
+  editorial_collection_handle = 'editorial', low_stock_threshold = 3, checkout_hold_minutes = 15, abandoned_cart_emails = 0, updated_at = ${NOW}
 WHERE id = 1 AND updated_at = 0`);
 
 // ── exchange policy (the store's published terms, as the old site quoted them)
@@ -158,7 +159,7 @@ const zone = id('zone', 'lebanon');
 add(`INSERT OR IGNORE INTO shipping_zones (id, name, created_at, updated_at) VALUES ${row(zone, 'Lebanon', NOW, NOW)}`);
 add(`INSERT OR IGNORE INTO shipping_zone_regions (id, zone_id, country_code, region_code) VALUES ${row(id('region', 'lb'), zone, 'LB', null)}`);
 add(`INSERT OR IGNORE INTO shipping_rates (id, zone_id, name, type, amount, min_value, max_value, delivery_estimate, active, position, created_at, updated_at)
-VALUES ${row(id('rate', 'lebanon-standard'), zone, 'Delivery in Lebanon', 'flat', 0, null, null, 'We call to confirm before it ships', true, 1, NOW, NOW)}`);
+VALUES ${row(id('rate', 'lebanon-standard'), zone, 'Delivery in Lebanon', 'flat', 500, null, null, '1–2 days', true, 1, NOW, NOW)}`);
 
 // ── tax: prices already include tax; a VAT rate is prepared but off until the store confirms it
 add(`INSERT OR IGNORE INTO tax_rates (id, country_code, region_code, name, rate_bps, applies_to_shipping, active, created_at, updated_at)
@@ -189,35 +190,39 @@ async function hashPassword(password, pepper, iterations = 100_000) {
 }
 
 const DEV_OWNER = { email: 'owner@fdm.test', password: 'fdm-owner-local-2026' };
-const DEV_CUSTOMER = { email: 'customer@fdm.test', password: 'fdm-customer-local-2026' };
+// a guest who has ordered — there are no customer accounts to sign in to
+const DEV_CUSTOMER = { email: 'customer@fdm.test', name: 'Lina Haddad', phone: '+961 3 000 000' };
 
 async function buildDev() {
   const vars = await readDevVars();
   const out = [];
   const put = (s) => out.push(s.trim().endsWith(';') ? s : `${s};`);
   if (!vars.PASSWORD_PEPPER) {
-    console.warn('! .dev.vars has no PASSWORD_PEPPER — dev accounts are skipped (copy .dev.vars.example first)');
+    console.warn('! .dev.vars has no PASSWORD_PEPPER — the dev owner is skipped (copy .dev.vars.example first)');
   } else {
     const iterations = Number(vars.PASSWORD_ITERATIONS) || 100_000;
     put(`INSERT OR IGNORE INTO staff_users (id, email, password_hash, name, role, permissions_json, status, session_epoch, last_login_at, created_at, updated_at)
 VALUES ${row(id('staff', DEV_OWNER.email), DEV_OWNER.email, await hashPassword(DEV_OWNER.password, vars.PASSWORD_PEPPER, iterations), 'Local Owner', 'owner', '[]', 'active', 0, null, NOW, NOW)}`);
-    put(`INSERT OR IGNORE INTO customers (id, email, password_hash, name, phone, email_verified_at, accepts_marketing, session_epoch, note, orders_count, total_spent_amount, last_order_at, created_at, updated_at)
-VALUES ${row(id('customer', DEV_CUSTOMER.email), DEV_CUSTOMER.email, await hashPassword(DEV_CUSTOMER.password, vars.PASSWORD_PEPPER, iterations), 'Lina Haddad', '+961 3 000 000', NOW, true, 0, null, 0, 0, null, NOW - 40 * DAY, NOW)}`);
-    put(`INSERT OR IGNORE INTO customer_addresses (id, customer_id, name, phone, line1, line2, city, region, postal_code, country_code, notes, is_default, created_at, updated_at)
-VALUES ${row(id('address', DEV_CUSTOMER.email), id('customer', DEV_CUSTOMER.email), 'Lina Haddad', '+961 3 000 000', 'Mar Mikhael, Armenia St.', 'Building 12, 3rd floor', 'Beirut', null, null, 'LB', null, true, NOW, NOW)}`);
   }
+  put(`INSERT OR IGNORE INTO customers (id, email, password_hash, name, phone, email_verified_at, accepts_marketing, session_epoch, note, orders_count, total_spent_amount, last_order_at, created_at, updated_at)
+VALUES ${row(id('customer', DEV_CUSTOMER.email), DEV_CUSTOMER.email, null, DEV_CUSTOMER.name, DEV_CUSTOMER.phone, null, true, 0, null, 0, 0, null, NOW - 40 * DAY, NOW)}`);
 
   // discount codes to try at checkout
   const discount = (code, title, type, value, extra = {}) =>
     put(`INSERT OR IGNORE INTO discounts (id, code, title, type, value, applies_to, min_subtotal_amount, min_quantity, usage_limit, usage_limit_per_customer, usage_count, buy_quantity, get_quantity, max_uses_per_order, starts_at, ends_at, status, created_at, updated_at)
 VALUES ${row(id('discount', code), code, title, type, value, extra.appliesTo ?? 'all', extra.minSubtotal ?? null, null, extra.usageLimit ?? null, extra.perCustomer ?? null, 0, extra.buy ?? null, extra.get ?? null, extra.maxUses ?? null, NOW - DAY, null, 'active', NOW, NOW)}`);
   discount('WELCOME10', '10% off your first order', 'percentage', 1000, { perCustomer: 1 });
+  // what the newsletter promises: one use each, so it is a first-order offer
+  discount('NEWSLETTER15', '15% off your first order', 'percentage', 1500, { perCustomer: 1 });
   discount('TWENTYOFF', '$20 off orders over $150', 'fixed_amount', 2000, { minSubtotal: 15000 });
   discount('FREESHIP', 'Free delivery', 'free_shipping', 0);
   discount('JEWELLERY3FOR2', 'Buy 2 jewellery pieces, the third is free', 'buy_x_get_y', 10000, { buy: 2, get: 1, maxUses: 1 });
   for (const role of ['buy', 'get']) {
     put(`INSERT OR IGNORE INTO discount_targets (discount_id, target_type, target_id, role) VALUES ${row(id('discount', 'JEWELLERY3FOR2'), 'collection', id('collection', 'jewellery'), role)}`);
   }
+
+  // the code the newsletter emails a new subscriber
+  put(`UPDATE store_settings SET newsletter_welcome_code = 'NEWSLETTER15' WHERE id = 1`);
 
   // a month of orders across every status, so the dashboard and order list have data
   const statuses = ['delivered', 'delivered', 'shipped', 'fulfilled', 'paid', 'pending', 'pending', 'cancelled', 'delivered', 'shipped', 'pending', 'delivered'];
@@ -240,7 +245,7 @@ VALUES ${row(oid, 1001 + i, null, customerId, DEV_CUSTOMER.email, '+961 3 000 00
     put(`INSERT OR IGNORE INTO order_lines (id, order_id, product_id, variant_id, product_handle, title, variant_title, sku, media_id, quantity, unit_price_amount, discount_amount, tax_amount, total_amount, requires_shipping, inventory_tracked, fulfilled_quantity, refunded_quantity, restocked_quantity)
 VALUES ${row(id('order-line', String(i)), oid, id('product', product.id), id('variant', String(variant.id)), product.id, product.name, [variant.size === 'One size' ? null : variant.size, variant.colour].filter(Boolean).join(' / '), null, id('media', product.id, '0'), qty, unit, 0, 0, total, true, true, ['fulfilled', 'shipped', 'delivered'].includes(status) ? qty : 0, 0, status === 'cancelled' ? qty : 0)}`);
     put(`INSERT OR IGNORE INTO order_events (id, order_id, type, from_status, to_status, actor_type, actor_id, message, data_json, customer_visible, created_at)
-VALUES ${row(id('event', String(i), 'placed'), oid, 'order_placed', null, 'pending', 'customer', customerId, 'Order placed — we will call to confirm', null, true, Math.round(placed))}`);
+VALUES ${row(id('event', String(i), 'placed'), oid, 'order_placed', null, 'pending', 'customer', customerId, 'Order placed', null, true, Math.round(placed))}`);
     if (status !== 'pending') {
       put(`INSERT OR IGNORE INTO order_events (id, order_id, type, from_status, to_status, actor_type, actor_id, message, data_json, customer_visible, created_at)
 VALUES ${row(id('event', String(i), status), oid, 'status_changed', 'pending', status, 'system', null, `Seeded as ${status}`, null, true, Math.round(placed + DAY / 2))}`);
@@ -264,5 +269,4 @@ await writeFile(new URL('seed/dev.sql', root), `-- GENERATED by scripts/build-se
 
 console.log(`seed/catalog.sql — ${PRODUCTS.length} products, ${PRODUCTS.reduce((n, p) => n + p.variants.length, 0)} variants, ${PRODUCTS.reduce((n, p) => n + p.images.length, 0)} images`);
 console.log(`seed/dev.sql     — local owner ${DEV_OWNER.email} / ${DEV_OWNER.password}`);
-console.log(`                   local customer ${DEV_CUSTOMER.email} / ${DEV_CUSTOMER.password}`);
-console.log('                   codes WELCOME10, TWENTYOFF, FREESHIP, JEWELLERY3FOR2');
+console.log('                   codes WELCOME10, NEWSLETTER15, TWENTYOFF, FREESHIP, JEWELLERY3FOR2');

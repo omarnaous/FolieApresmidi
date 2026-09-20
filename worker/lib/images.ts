@@ -15,6 +15,24 @@ export function sniffImage(bytes: Uint8Array): ImageKind | null {
   return null;
 }
 
+/**
+ * The two files the site itself uses: the opening film and the notebook the
+ * Limited edition section hands out. Sniffed by their bytes, like the images.
+ */
+export function sniffSiteFile(bytes: Uint8Array): ImageKind | null {
+  const ascii = (from: number, len: number) => String.fromCharCode(...bytes.slice(from, from + len));
+  if (ascii(0, 4) === '%PDF') return { mime: 'application/pdf', ext: 'pdf' };
+  // an MP4 (or QuickTime) file names its brand in the ftyp box
+  if (ascii(4, 4) === 'ftyp') {
+    const brand = ascii(8, 4);
+    if (['isom', 'iso2', 'mp41', 'mp42', 'avc1', 'M4V ', 'qt  '].includes(brand)) return { mime: 'video/mp4', ext: 'mp4' };
+  }
+  return null;
+}
+
+/** A film is big; a notebook is not. One at a time, so one request carries one file. */
+export const MAX_SITE_FILE_BYTES = 80 * 1024 * 1024;
+
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_UPLOAD_FILES = 20;
 

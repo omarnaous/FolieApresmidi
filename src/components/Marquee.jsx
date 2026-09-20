@@ -1,9 +1,11 @@
 import React from 'react';
+import { useStore } from '../lib/queries';
 
-const WORDS = ['Épicée', 'Libre', 'Échappée 4 à 7', 'Made in Lebanon', 'Limited quantities', 'Prêt-à-porter'];
-
+/** Until the store answers, the ribbon runs empty rather than on words the owner may have changed. */
 export default function Marquee() {
-  const run = [...WORDS, ...WORDS];
+  const words = useStore().data?.home?.ribbon ?? [];
+  if (words.length === 0) return null;
+  const run = [...words, ...words];
   return (
     <div className="marquee" aria-hidden="true">
       <div className="marquee-track">

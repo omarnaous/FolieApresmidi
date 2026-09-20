@@ -74,7 +74,6 @@ export default function CustomersList() {
                 { key: 'orders', header: 'Orders', align: 'right', cell: (c) => c.ordersCount.toLocaleString(), sort: (a, b) => a.ordersCount - b.ordersCount },
                 { key: 'spent', header: 'Total spent', align: 'right', cell: (c) => money(c.totalSpent), sort: (a, b) => a.totalSpent - b.totalSpent },
                 { key: 'marketing', header: 'Marketing', cell: (c) => <Badge tone={c.acceptsMarketing ? 'success' : 'neutral'}>{c.acceptsMarketing ? 'Subscribed' : 'Not subscribed'}</Badge> },
-                { key: 'account', header: 'Account', cell: (c) => (c.hasAccount ? 'Yes' : 'No') },
                 { key: 'last', header: 'Last order', cell: (c) => (c.lastOrderAt ? fmtDate(c.lastOrderAt) : <span className="adm-muted">—</span>), sort: (a, b) => (a.lastOrderAt ?? 0) - (b.lastOrderAt ?? 0) },
               ]}
               footer={<LoadMore shown={rows.length} total={total} hasMore={!!list.hasNextPage} loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()} />}

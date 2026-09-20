@@ -1,7 +1,7 @@
 import type { CartDTO, CartLineDTO } from '../../shared/api';
 import { evaluateDiscount } from '../domain/discounts';
 import { sum } from '../domain/math';
-import { clearCookie, COOKIES, readCookie, writeCookie } from '../lib/cookies';
+import { COOKIES, readCookie, writeCookie } from '../lib/cookies';
 import { sign, unsign } from '../lib/crypto';
 import { AppError, notFound } from '../lib/errors';
 import { ulid } from '../lib/ids';
@@ -29,16 +29,12 @@ async function setCartCookie(c: Ctx, cartId: string) {
   writeCookie(c, COOKIES.cart, await sign(cartId, c.env.COOKIE_SECRET), { maxAge: CART_COOKIE_TTL });
 }
 
-/** The shopper's active cart: the account's when signed in, otherwise the signed guest cookie's. */
+/**
+ * The shopper's active cart, from the signed cookie. Every shopper is a
+ * guest; a cart left from when the store had accounts is never handed out.
+ */
 export async function findCart(c: Ctx): Promise<CartRow | null> {
   const d1 = c.env.DB;
-  const customer = c.get('customer');
-  if (customer) {
-    return d1
-      .prepare(`SELECT * FROM carts WHERE customer_id = ? AND status = 'active' ORDER BY updated_at DESC LIMIT 1`)
-      .bind(customer.id)
-      .first<CartRow>();
-  }
   const id = await unsign(readCookie(c, COOKIES.cart), c.env.COOKIE_SECRET);
   if (!id) return null;
   const row = await d1.prepare(`SELECT * FROM carts WHERE id = ?`).bind(id).first<CartRow>();
@@ -47,53 +43,17 @@ export async function findCart(c: Ctx): Promise<CartRow | null> {
 
 export async function findOrCreateCart(c: Ctx): Promise<CartRow> {
   const existing = await findCart(c);
-  const customer = c.get('customer');
   if (existing) {
-    if (!customer) await setCartCookie(c, existing.id);
+    await setCartCookie(c, existing.id);
     return existing;
   }
   const now = Date.now();
-  const row: CartRow = { id: ulid(now), customer_id: customer?.id ?? null, email: null, discount_code: null, status: 'active', updated_at: now };
-  await c.env.DB.prepare(`INSERT INTO carts (id, customer_id, email, discount_code, status, created_at, updated_at) VALUES (?, ?, NULL, NULL, 'active', ?, ?)`)
-    .bind(row.id, row.customer_id, now, now)
+  const row: CartRow = { id: ulid(now), customer_id: null, email: null, discount_code: null, status: 'active', updated_at: now };
+  await c.env.DB.prepare(`INSERT INTO carts (id, customer_id, email, discount_code, status, created_at, updated_at) VALUES (?, NULL, NULL, NULL, 'active', ?, ?)`)
+    .bind(row.id, now, now)
     .run();
-  if (!customer) await setCartCookie(c, row.id);
+  await setCartCookie(c, row.id);
   return row;
-}
-
-/** Signing in keeps what the guest put in the bag: lines are added to the account's cart. */
-export async function mergeGuestCart(c: Ctx, customerId: string): Promise<void> {
-  const d1 = c.env.DB;
-  const guestId = await unsign(readCookie(c, COOKIES.cart), c.env.COOKIE_SECRET);
-  clearCookie(c, COOKIES.cart);
-  if (!guestId) return;
-
-  const guest = await d1.prepare(`SELECT * FROM carts WHERE id = ? AND status = 'active' AND customer_id IS NULL`).bind(guestId).first<CartRow>();
-  if (!guest) return;
-  const now = Date.now();
-  const mine = await d1
-    .prepare(`SELECT * FROM carts WHERE customer_id = ? AND status = 'active' ORDER BY updated_at DESC LIMIT 1`)
-    .bind(customerId)
-    .first<CartRow>();
-
-  if (!mine) {
-    await d1.prepare(`UPDATE carts SET customer_id = ?, updated_at = ? WHERE id = ?`).bind(customerId, now, guest.id).run();
-    return;
-  }
-
-  const { results: lines } = await d1.prepare(`SELECT variant_id, quantity FROM cart_lines WHERE cart_id = ?`).bind(guest.id).all<{ variant_id: string; quantity: number }>();
-  await d1.batch([
-    ...lines.map((l) =>
-      d1
-        .prepare(
-          `INSERT INTO cart_lines (id, cart_id, variant_id, quantity, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-           ON CONFLICT(cart_id, variant_id) DO UPDATE SET quantity = min(${MAX_LINE_QTY}, cart_lines.quantity + excluded.quantity), updated_at = excluded.updated_at`,
-        )
-        .bind(ulid(now), mine.id, l.variant_id, Math.min(MAX_LINE_QTY, l.quantity), now, now),
-    ),
-    d1.prepare(`UPDATE carts SET discount_code = coalesce(discount_code, ?), updated_at = ? WHERE id = ?`).bind(guest.discount_code, now, mine.id),
-    d1.prepare(`UPDATE carts SET status = 'merged', updated_at = ? WHERE id = ?`).bind(now, guest.id),
-  ]);
 }
 
 async function ensureSellable(c: Ctx, detail: VariantDetail | undefined, quantity: number) {
@@ -239,8 +199,7 @@ export async function cartDTO(c: Ctx, known?: CartRow | null): Promise<CartDTO> 
     const rule = await discountByCode(d1, cart.discount_code);
     if (!rule) discountError = 'That code does not exist';
     else {
-      const customer = c.get('customer');
-      const uses = await redemptionsBy(d1, rule.id, cart.email, customer?.id ?? null);
+      const uses = await redemptionsBy(d1, rule.id, cart.email, null);
       const result = evaluateDiscount(
         toRule(rule),
         lines.map((l) => ({

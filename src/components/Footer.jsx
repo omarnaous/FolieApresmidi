@@ -1,41 +1,32 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Link } from 'react-router';
 import Reveal from './Reveal';
-import { useCollection, useStore } from '../lib/queries';
+import { useStore } from '../lib/queries';
 import { instagramHandle } from '../lib/store';
 
 const LINK = { fontSize: 14, color: 'var(--bone-70)' };
 
-export default function Footer() {
+/**
+ * The foot of the house. The navigation lives in the bar and the menu, so
+ * nothing is repeated here: what is left is how to reach the house — the
+ * list, the address it answers from, its policies, its Instagram and its
+ * telephone — each of them shown only if the owner has filled it in.
+ */
+export default function Footer({ inert }) {
   const { data: store } = useStore();
-  const { data: featured } = useCollection(store?.featuredCollectionHandle);
+  const copy = store?.home?.footer;
   const ig = instagramHandle(store?.contact.instagram);
   const email = store?.contact.email;
-
-  /* The store's own categories, the drop first, split over two columns. */
-  const cols = useMemo(() => {
-    const links = (store?.menu ?? [])
-      .filter((m) => m.collectionHandle)
-      .map((m) => ({ label: m.label, handle: m.collectionHandle }));
-    if (featured && !links.some((l) => l.handle === featured.handle)) {
-      links.unshift({ label: featured.title, handle: featured.handle });
-    }
-    const half = Math.ceil(links.length / 2);
-    return [
-      { t: 'Boutique', l: links.slice(0, half) },
-      { t: 'Also', l: links.slice(half) },
-    ];
-  }, [store, featured]);
+  const phone = store?.contact.phone;
 
   return (
-    <footer className="foot">
+    <footer className="foot" inert={inert}>
       <div className="shell">
         <div className="foot-cols">
           <div className="foot-col">
-            <div className="label">Follies d'Après-Midi</div>
+            <div className="label">{store?.name ?? ''}</div>
             <p className="lede" style={{ color: 'var(--bone-70)', fontSize: 15, maxWidth: '34ch' }}>
-              Luxury prêt-à-porter, designed and produced in limited quantities in Lebanon.
-              Épicée. Libre.
+              {copy?.blurb ?? ''}
             </p>
             {ig && (
               <a
@@ -50,15 +41,6 @@ export default function Footer() {
             )}
           </div>
 
-          {cols.map((c) => (
-            <div className="foot-col" key={c.t}>
-              <div className="label">{c.t}</div>
-              {c.l.map((x) => (
-                <Link className="link-u" key={x.handle} to={`/collections/${x.handle}`} style={LINK}>{x.label}</Link>
-              ))}
-            </div>
-          ))}
-
           <div className="foot-col">
             <div className="label">Client care</div>
             {email && (
@@ -66,12 +48,17 @@ export default function Footer() {
                 {email}
               </a>
             )}
+            {phone && (
+              <a className="link-u" href={`tel:${phone.replace(/[^+\d]/g, '')}`} style={LINK} data-cursor="Call">
+                {phone}
+              </a>
+            )}
             {(store?.policies ?? []).map((p) => (
               <Link className="link-u" key={p.handle} to={`/pages/${p.handle}`} style={LINK}>{p.title}</Link>
             ))}
-            <span className="label muted" style={{ color: 'var(--bone-40)', lineHeight: 1.8 }}>
-              Exchanges within 24 hours.<br />No refunds.
-            </span>
+            {copy?.careNote && (
+              <span className="label muted" style={{ color: 'var(--bone-40)', lineHeight: 1.8 }}>{copy.careNote}</span>
+            )}
           </div>
         </div>
       </div>
@@ -84,7 +71,7 @@ export default function Footer() {
         <div className="foot-base label">
           <span>© {new Date().getFullYear()} Follies d'Après-Midi</span>
           <span>Beirut — 33.8938° N, 35.5018° E</span>
-          <span>Built with React &amp; Remotion</span>
+          <span>Épicée. Libre.</span>
         </div>
       </div>
     </footer>

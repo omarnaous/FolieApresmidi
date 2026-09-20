@@ -6,7 +6,7 @@ import { errorFields, log } from '../lib/log';
 import { variantDetails } from '../services/lines';
 import { rematerialize, rematerializeForProducts } from '../services/collections';
 import { orderById, orderDTO } from '../services/orders';
-import { getSettings } from '../services/settings';
+import { getSettings, readOrderEmail } from '../services/settings';
 import { runCsvImport } from './csv-import';
 import type { JobMessage } from './messages';
 
@@ -33,13 +33,15 @@ export async function runJob(env: Env, job: JobMessage, messageId: string): Prom
     const token = row.checkout_id
       ? (await env.DB.prepare('SELECT order_token FROM checkouts WHERE id = ?').bind(row.checkout_id).first<{ order_token: string | null }>())?.order_token
       : null;
-    return { row, dto: await orderDTO(db, row), statusUrl: token ? `${env.APP_URL}/orders/${token}` : `${env.APP_URL}/account/orders/${row.number}` };
+    // the status page link lapses 90 days after the order; the email then goes without it
+    return { row, dto: await orderDTO(db, row), statusUrl: token ? `${env.APP_URL}/orders/${token}` : null };
   };
 
   switch (job.type) {
     case 'email.order_confirmation': {
       const o = await loadOrder(job.orderId);
-      if (o) await sendEmail(env, o.row.email, templates.orderConfirmation(brand, o.dto, o.statusUrl), `order-confirmation:${job.orderId}`);
+      // the words are the owner's, written under Website design → Store details
+      if (o) await sendEmail(env, o.row.email, templates.orderConfirmation(brand, o.dto, o.statusUrl, readOrderEmail(settings.orderEmailJson)), `order-confirmation:${job.orderId}`);
       return;
     }
     case 'email.order_status': {
@@ -53,9 +55,6 @@ export async function runJob(env: Env, job: JobMessage, messageId: string): Prom
       if (o) await sendEmail(env, settings.orderNotificationEmail, templates.newOrderAlert(brand, o.dto, `${env.APP_URL}/admin/orders/${job.orderId}`), `order-alert:${job.orderId}`);
       return;
     }
-    case 'email.verify':
-      await sendEmail(env, job.to, templates.verifyEmail(brand, job.name, job.url), `verify:${messageId}`);
-      return;
     case 'email.password_reset':
       await sendEmail(env, job.to, templates.passwordReset(brand, job.name, job.url), `reset:${messageId}`);
       return;

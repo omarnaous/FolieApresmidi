@@ -17,12 +17,15 @@ export function ProductPicker({
   onSelect,
   excludeIds = [],
   title = 'Add products',
+  max,
 }: {
   open: boolean;
   onClose: () => void;
   onSelect: (items: AdminProductListItemDTO[]) => void;
   excludeIds?: string[];
   title?: string;
+  /** how many may be picked at once; the rest are disabled once it is reached */
+  max?: number;
 }) {
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<Map<string, AdminProductListItemDTO>>(new Map());
@@ -34,6 +37,7 @@ export function ProductPicker({
   });
   const exclude = new Set(excludeIds);
   const items = (list.data?.items ?? []).filter((p) => !exclude.has(p.id));
+  const full = max !== undefined && picked.size >= max;
 
   const close = () => {
     setPicked(new Map());
@@ -82,7 +86,7 @@ export function ProductPicker({
           {items.map((p) => (
             <li key={p.id}>
               <label className="adm-picklist__row">
-                <input type="checkbox" checked={picked.has(p.id)} onChange={() => toggle(p)} />
+                <input type="checkbox" checked={picked.has(p.id)} disabled={full && !picked.has(p.id)} onChange={() => toggle(p)} />
                 <Thumb src={p.image ? imageSrc(p.image, 320) : null} size={36} />
                 <span className="adm-picklist__title">{p.title}</span>
                 <ProductStatusBadge status={p.status} />
@@ -168,7 +172,6 @@ export function CollectionPicker({
                   }
                 />
                 <span className="adm-picklist__title">{c.title}</span>
-                <span className="adm-muted">{c.type === 'smart' ? 'Smart' : 'Manual'}</span>
               </label>
             </li>
           ))}

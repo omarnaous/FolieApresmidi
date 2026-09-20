@@ -31,6 +31,14 @@ export const storeSettings = sqliteTable(
     address: text('address'),
     logoMediaId: text('logo_media_id'),
     menuJson: text('menu_json').notNull().default('[]'),
+    /** Home page copy the owner edits (section names, the Maison floors); `{}` means the built-in defaults. */
+    homeJson: text('home_json').notNull().default('{}'),
+    /** the size chart shown on every product with sizes */
+    sizeChartJson: text('size_chart_json').notNull().default('{}'),
+    /** the words of the confirmation a buyer is sent, written by the owner */
+    orderEmailJson: text('order_email_json').notNull().default('{}'),
+    /** the discount code emailed to a new subscriber; null sends no code */
+    newsletterWelcomeCode: text('newsletter_welcome_code'),
     featuredCollectionHandle: text('featured_collection_handle'),
     lookbookCollectionHandle: text('lookbook_collection_handle'),
     editorialCollectionHandle: text('editorial_collection_handle'),
@@ -224,6 +232,25 @@ export const collectionProducts = sqliteTable(
   ],
 );
 
+/**
+ * Shop the look: the pieces the owner pairs with a product, in their order.
+ * Either side going away takes the pairing with it.
+ */
+export const productLooks = sqliteTable(
+  'product_looks',
+  {
+    productId: text('product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+    lookProductId: text('look_product_id').notNull().references(() => products.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.productId, t.lookProductId] }),
+    index('product_looks_position').on(t.productId, t.position),
+    index('product_looks_look').on(t.lookProductId),
+    check('product_looks_not_self', sql`${t.productId} != ${t.lookProductId}`),
+  ],
+);
+
 export const inventoryReservations = sqliteTable(
   'inventory_reservations',
   {
@@ -351,9 +378,32 @@ export const subscribers = sqliteTable('subscribers', {
   customerId: text('customer_id'),
   source: text('source').notNull(),
   status: text('status', { enum: ['subscribed', 'unsubscribed'] }).notNull().default('subscribed'),
+  /** when the welcome code went out; set once, so one address is only ever sent one */
+  welcomeSentAt: integer('welcome_sent_at'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/** One newsletter sent (or being sent) to the subscribers. */
+export const newsletterCampaigns = sqliteTable(
+  'newsletter_campaigns',
+  {
+    id: id(),
+    subject: text('subject').notNull(),
+    bodyHtml: text('body_html').notNull(),
+    status: text('status', { enum: ['sending', 'sent'] }).notNull().default('sending'),
+    /** how many were subscribed when it went out, and how many have been sent so far */
+    recipients: integer('recipients').notNull().default(0),
+    sentCount: integer('sent_count').notNull().default(0),
+    staffId: text('staff_id'),
+    createdAt: createdAt(),
+    sentAt: integer('sent_at'),
+  },
+  (t) => [
+    check('newsletter_campaigns_status', sql`${t.status} in ('sending','sent')`),
+    index('newsletter_campaigns_created').on(t.createdAt),
+  ],
+);
 
 /* ─────────────────────────── cart & checkout ─────────────────────────── */
 

@@ -12,12 +12,13 @@ npm run dev           # the site                 → http://localhost:5173
 ```
 
 Open <http://localhost:5173>. Vite forwards `/api`, `/media/products`,
-`/sitemap.xml` and `/robots.txt` to the Worker, so the browser sees one origin —
+`/sitemap.xml`, `/robots.txt`, `/cart/recover` and `/unsubscribe` to the
+Worker, so the browser sees one origin —
 the same shape as production, where one Worker serves everything.
 
-The seed prints local sign-ins: an admin owner for `/admin` and a customer for
-the storefront, plus the discount codes `WELCOME10`, `TWENTYOFF`, `FREESHIP`
-and `JEWELLERY3FOR2`.
+The seed prints the local admin sign-in (the owner, for `/admin`) and the
+discount codes `WELCOME10`, `NEWSLETTER15`,
+`TWENTYOFF`, `FREESHIP` and `JEWELLERY3FOR2`.
 
 | Command | What it does |
 |---|---|
@@ -36,11 +37,15 @@ and `JEWELLERY3FOR2`.
 A shop of Shopify's shape, on Cloudflare's runtime.
 
 - **Storefront** — catalogue with full-text search, filters and facets; product
-  pages with variants and live stock; a persistent bag; a three-step checkout;
-  customer accounts with orders, addresses and a wishlist.
+  pages with variants, live stock, a size chart and shop the look; a persistent bag; a
+  three-step guest checkout. There are no customer accounts — nobody signs up;
+  staff sign in to the admin.
 - **Admin** (`/admin`) — dashboard, products and inventory, collections
   (manual and rule-based), orders with fulfilment and refunds, customers,
-  discounts, shipping, taxes, pages, staff with roles, and an audit log.
+  discounts, shipping, taxes, pages, the website (the film, the ribbon, every
+  section's words and order, the floors, the notebook, the pop-ups and the
+  footer), the newsletter (the welcome code, and writing one letter to the
+  list), staff with roles, and an audit log.
 - **Payment** — cash on delivery, behind a provider interface that a gateway
   can be dropped into without touching business logic.
 - **Jobs** — transactional email, abandoned-cart reminders, CSV imports and
@@ -55,7 +60,7 @@ The architecture, the schema and the decisions behind them are in
 ```
 worker/           the Worker — Hono
   app.ts            routes and middleware order
-  routes/           store · cart · checkout · auth · account · admin/* · webhooks · seo · media
+  routes/           store · cart · checkout · session (CSRF) · admin/* · webhooks · seo · media
   services/         catalog · cart · checkout · orders · inventory · collections · admin-products …
   domain/           pure rules: pricing · discounts · tax · shipping · order-state · math
   payments/         provider interface · registry · cod
@@ -65,7 +70,7 @@ worker/           the Worker — Hono
 shared/           the API contract: Zod inputs, DTO types, route map
 src/              the site — existing components untouched in look, now fed by the API
   admin/            the admin app (lazy-loaded chunk, styles scoped under .adm)
-  account/ checkout/ content/   sheets that match the storefront's design system
+  checkout/ content/   sheets that match the storefront's design system
   remotion/         the hero film
 migrations/       numbered SQL, applied by wrangler
 seed/             generated SQL (catalogue, and local-only demo data)

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { imageSrc } from '../../shared/api';
 import { useCart } from '../store/cart';
 import { useMoney } from '../lib/queries';
@@ -13,26 +13,14 @@ function problemFor(line, warnings) {
 }
 
 export default function CartDrawer({ open, onClose, onCheckout }) {
-  const { cart, lines, count, subtotal, busy, qty, remove, applyDiscount, removeDiscount } = useCart();
+  const { cart, lines, count, subtotal, busy, qty, remove } = useCart();
   const money = useMoney();
   const drawer = useRef(null);
-  const [coding, setCoding] = useState(false);
-  const [code, setCode] = useState('');
-  const [codeError, setCodeError] = useState(null);
 
   useEscape(open, onClose);
   useSheetFocus(drawer, open);
 
   const warnings = cart?.warnings ?? [];
-
-  const apply = async (e) => {
-    e.preventDefault();
-    const value = code.trim();
-    if (!value) return;
-    const problem = await applyDiscount(value);
-    setCodeError(problem);
-    if (!problem) { setCode(''); setCoding(false); }
-  };
 
   return (
     // data-lenis-prevent so the bag still scrolls on touch: a stopped Lenis
@@ -64,7 +52,8 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
             return (
               <div className="line" key={l.id}>
                 <div className="plate packshot">
-                  {l.image && <img src={imageSrc(l.image, 320)} alt={l.image.alt || l.productTitle} loading="lazy" />}
+                  {l.image && <img
+              decoding="async" src={imageSrc(l.image, 320)} alt={l.image.alt || l.productTitle} loading="lazy" />}
                 </div>
                 <div className="line-mid">
                   <span className="line-name">{l.productTitle}</span>
@@ -94,40 +83,12 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
 
       {lines.length > 0 && (
         <div className="drawer-foot">
-          {cart?.discountCode ? (
-            <div className="bag-code-on">
-              <span className="label">
-                Code {cart.discountCode}
-                {cart.discountAmount > 0 ? ` — −${money(cart.discountAmount)}` : ''}
-              </span>
-              <button className="x" onClick={removeDiscount}>Remove</button>
-            </div>
-          ) : coding ? (
-            <form className="bag-code" onSubmit={apply}>
-              <label className="sr-only" htmlFor="bag-code">Discount code</label>
-              <input
-                id="bag-code"
-                value={code}
-                onChange={(e) => { setCode(e.target.value); setCodeError(null); }}
-                placeholder="Discount code"
-                autoComplete="off"
-                autoCapitalize="characters"
-                aria-invalid={!!codeError}
-              />
-              <button type="submit" className="label link-u" disabled={!code.trim() || busy}>Apply</button>
-            </form>
-          ) : (
-            <button className="label link-u bag-code-add" onClick={() => setCoding(true)}>Add a code</button>
-          )}
-          {(codeError || cart?.discountError) && (
-            <span className="co-err label" role="alert">{codeError || cart.discountError}</span>
-          )}
-
           <div className="total">
             <span className="label">Subtotal</span>
             <b>{money(subtotal)}</b>
           </div>
-          <span className="label muted">Shipping and duties calculated at checkout.</span>
+          {/* the code is asked for once, at the checkout, where the total it changes is */}
+          <span className="label muted">Shipping and any code are taken at checkout.</span>
           <button className="btn solid block" data-cursor="Checkout" onClick={onCheckout}>Checkout</button>
         </div>
       )}

@@ -119,13 +119,12 @@ export async function shipsTo(d1: D1Database): Promise<{ code: string; name: str
 
 /* ─────────────────────────── loading & authorisation ─────────────────────────── */
 
-/** A checkout belongs to the cart in the shopper's cookie, or to their account. */
+/** A checkout belongs to the cart in the shopper's cookie. */
 export async function loadCheckout(c: Ctx, id: string): Promise<CheckoutRow> {
   const row = await c.env.DB.prepare('SELECT * FROM checkouts WHERE id = ?').bind(id).first<CheckoutRow>();
   if (!row) throw notFound('Checkout not found');
-  const customer = c.get('customer');
   const cookieCart = await unsign(readCookie(c, COOKIES.cart), c.env.COOKIE_SECRET);
-  const owns = (customer && row.customer_id === customer.id) || (!row.customer_id && cookieCart === row.cart_id);
+  const owns = !row.customer_id && cookieCart === row.cart_id;
   if (!owns) throw notFound('Checkout not found');
   return row;
 }
@@ -280,36 +279,6 @@ export async function createCheckout(c: Ctx): Promise<CheckoutDTO> {
   }
 
   const settings = await getSettings(db);
-  const customer = c.get('customer');
-  let email = cart.email;
-  let phone: string | null = null;
-  let address: AddressDTO | null = null;
-  let acceptsMarketing = false;
-  if (customer) {
-    const me = await d1.prepare('SELECT email, name, phone, accepts_marketing FROM customers WHERE id = ?').bind(customer.id).first<{ email: string; name: string; phone: string | null; accepts_marketing: number }>();
-    email = me?.email ?? email;
-    phone = me?.phone ?? null;
-    acceptsMarketing = !!me?.accepts_marketing;
-    const a = await d1
-      .prepare('SELECT * FROM customer_addresses WHERE customer_id = ? ORDER BY is_default DESC, updated_at DESC LIMIT 1')
-      .bind(customer.id)
-      .first<Record<string, unknown>>();
-    if (a) {
-      address = {
-        name: a.name as string,
-        phone: a.phone as string,
-        line1: a.line1 as string,
-        line2: a.line2 as string,
-        city: a.city as string,
-        region: (a.region as string | null) ?? null,
-        postalCode: (a.postal_code as string | null) ?? null,
-        countryCode: a.country_code as string,
-        notes: (a.notes as string | null) ?? null,
-      };
-      phone ??= address.phone;
-    }
-  }
-
   const id = ulid(now);
   const holdUntil = now + settings.checkoutHoldMinutes * 60_000;
   await d1.batch([
@@ -319,9 +288,9 @@ export async function createCheckout(c: Ctx): Promise<CheckoutDTO> {
       .prepare(
         `INSERT INTO checkouts (id, cart_id, customer_id, email, phone, accepts_marketing, shipping_address_json, shipping_rate_id,
                                 discount_code, note, lines_json, pricing_json, total_amount, currency, status, expires_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, NULL, 0, ?, 'open', ?, ?, ?)`,
+         VALUES (?, ?, NULL, ?, NULL, 0, NULL, NULL, ?, NULL, ?, NULL, 0, ?, 'open', ?, ?, ?)`,
       )
-      .bind(id, cart.id, customer?.id ?? null, email, phone, acceptsMarketing ? 1 : 0, address ? JSON.stringify(address) : null, cart.discount_code, JSON.stringify(lines), settings.currency, now + CHECKOUT_TTL_MS, now, now),
+      .bind(id, cart.id, cart.email, cart.discount_code, JSON.stringify(lines), settings.currency, now + CHECKOUT_TTL_MS, now, now),
     ...(settings.checkoutHoldMinutes > 0 ? holdStatements(d1, id, lines, holdUntil) : []),
   ]);
 

@@ -48,7 +48,7 @@ npm run deploy:preview      # typecheck → tests → build → migrate → depl
 npm run db:seed:preview     # 54 demo products, discount codes, a test owner
 ```
 
-The seeded accounts only work if `PASSWORD_PEPPER` and `PASSWORD_ITERATIONS`
+The seeded owner sign-in only works if `PASSWORD_PEPPER` and `PASSWORD_ITERATIONS`
 match the `.dev.vars` the seed was built from — `db:seed:preview` rebuilds it,
 so set `.dev.vars` first.
 
@@ -154,6 +154,10 @@ password. It only works while no staff account exists. Afterwards, in the admin:
 - [ ] **Taxes** — turn on VAT only if the store charges it (seeded off).
 - [ ] **Settings** — contact details, the category menu, and the notification
       address for new orders.
+- [ ] **Home page** — the section names, and the Maison FDM floors: a name,
+      a line, the collection each opens and, optionally, its own image. Until
+      saved, the floors are Tops, Bottoms, Bralettes and Accessories
+      (the `jewellery` collection), pictured from their collections.
 
 ## 6. A custom domain
 

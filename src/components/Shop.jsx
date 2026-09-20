@@ -1,88 +1,59 @@
 import React, { useMemo, useState } from 'react';
-import { eyebrow } from '../data/sections';
-import ProductCard from './ProductCard';
-import Reveal from './Reveal';
-import { CardSkeletons } from '../ui/Skeleton';
-import { featuredIn } from '../lib/catalog';
-import { homeGridQuery, useCollection, useProductList, useStore } from '../lib/queries';
+import { useEyebrow } from '../data/sections';
+import { emphasis } from '../lib/emphasis';
+import { ACCESSORY_HANDLES } from '../data/accessories';
+import Shelf from './Shelf';
+import ShelfTabs from './ShelfTabs';
+import { homeGridQuery, useCollection, usePrefetchProductList, useStore } from '../lib/queries';
 
-/** The home grid is a taster, not the catalogue — see /components/Catalogue. */
+/**
+ * The boutique: up to ten ready-to-wear pieces on a shelf under the drop's
+ * name, with words for tabs. Accessories have a section of their own, so
+ * their collections are kept off these tabs. "See all" goes to the full
+ * catalogue for what is showing.
+ */
 export default function Shop({ onOpen, onAll }) {
+  const eyebrow = useEyebrow('#boutique');
   const { data: store } = useStore();
   const featured = useCollection(store?.featuredCollectionHandle);
-  // a collection handle; null is "All"
-  const [active, setActive] = useState(null);
-  const { data, isPending, isError, isFetching, refetch } = useProductList(homeGridQuery(active));
+  const prefetch = usePrefetchProductList();
 
-  const menu = store?.menu ?? [];
-  const shown = data?.items ?? [];
-  const total = data?.total ?? 0;
-  const activeLabel = menu.find((m) => m.collectionHandle === active)?.label;
-  // the drop's own title, or the house name if there is no drop to name
-  const heading = (store?.featuredCollectionHandle && !featured.isError ? featured.data?.title : store?.name) ?? ' ';
+  // the owner's own title wins; with none, the drop names the section
+  const copy = store?.home?.boutique;
+  const heading = copy?.heading || ((store?.featuredCollectionHandle && !featured.isError ? featured.data?.title : store?.name) ?? ' ');
 
-  // the heading already names the drop — only badge cards when the row
-  // actually holds both, otherwise every card carries the same sticker
-  const mixed = useMemo(
-    () => shown.some((p) => featuredIn(p, store)) && shown.some((p) => !featuredIn(p, store)),
-    [shown, store],
+  const tabs = useMemo(
+    () => (store?.menu ?? [])
+      .filter((m) => !ACCESSORY_HANDLES.has(m.collectionHandle))
+      .map((m) => ({ value: m.collectionHandle, label: m.label })),
+    [store?.menu],
   );
+  const [active, setActive] = useState(null);
 
   return (
-    <section className="section shell" id="boutique" style={{ paddingTop: 'clamp(60px, 9vh, 120px)' }}>
+    <section className="section shell has-shelf" id="boutique">
       <div className="sec-head">
         <div>
-          <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow('#boutique')}</div>
-          <h2 className="display d-md">{heading}</h2>
+          <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow}</div>
+          <h2 className="display d-md">{emphasis(heading)}</h2>
+          {copy?.intro && <p className="sec-sub">{copy.intro}</p>}
         </div>
-        <div className="filters">
-          {menu.map((c) => (
-            <button
-              key={c.collectionHandle ?? 'all'}
-              className={`chip ${active === c.collectionHandle ? 'on' : ''}`}
-              aria-pressed={active === c.collectionHandle}
-              onClick={() => setActive(c.collectionHandle)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        <ShelfTabs
+          options={tabs}
+          value={active}
+          onChange={setActive}
+          onPreview={(c) => prefetch(homeGridQuery(c))}
+          controls="shelf-wear"
+          label="Filter ready-to-wear"
+        />
       </div>
-
-      {isError && !data ? (
-        <div className="cat-empty" role="alert">
-          <span className="display d-sm">The boutique did not load.</span>
-          <span className="label muted">Check your connection, then try again.</span>
-          <button className="btn" onClick={() => refetch()}>Try again</button>
-        </div>
-      ) : data && shown.length === 0 ? (
-        <div className="cat-empty">
-          <span className="display d-sm">Nothing here yet.</span>
-          <span className="label muted">Produced in limited quantities.</span>
-        </div>
-      ) : (
-        <div className="grid" aria-busy={isFetching}>
-          {isPending ? (
-            <CardSkeletons count={8} />
-          ) : (
-            shown.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} onOpen={onOpen} showDrop={mixed} />
-            ))
-          )}
-        </div>
-      )}
-
-      {total > 0 && (
-        <Reveal delay={150} className="more">
-          <span className="label muted">
-            Showing {shown.length} of {total}
-            {active === null ? ' pieces' : ` in ${activeLabel}`}
-          </span>
-          <button className="btn solid" onClick={() => onAll(active)} data-cursor="All">
-            See all {total} pieces
-          </button>
-        </Reveal>
-      )}
+      <Shelf
+        id="shelf-wear"
+        collection={active}
+        label="Ready-to-wear"
+        onOpen={onOpen}
+        onAll={onAll}
+      />
     </section>
   );
 }

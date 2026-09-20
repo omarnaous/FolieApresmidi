@@ -23,7 +23,8 @@ export function SummaryLines({ lines, format }: { lines: SummaryLine[]; format: 
       {lines.map((l) => (
         <li className="co-line" key={l.key}>
           <span className="plate packshot co-thumb">
-            {l.image && <img src={imageSrc(l.image, 320)} alt={l.image.alt || l.title} loading="lazy" />}
+            {l.image && <img
+              decoding="async" src={imageSrc(l.image, 320)} alt={l.image.alt || l.title} loading="lazy" />}
           </span>
           <span className="co-line-mid">
             <span className="co-line-name">{l.title}</span>

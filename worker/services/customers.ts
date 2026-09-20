@@ -1,4 +1,4 @@
-import type { CustomerDTO, SavedAddressDTO } from '../../shared/api';
+import type { SavedAddressDTO } from '../../shared/api';
 
 export interface CustomerRow {
   id: string;
@@ -17,19 +17,7 @@ export interface CustomerRow {
   updated_at: number;
 }
 
-export const customerDTO = (r: CustomerRow): CustomerDTO => ({
-  id: r.id,
-  email: r.email,
-  name: r.name,
-  phone: r.phone,
-  emailVerified: !!r.email_verified_at,
-  acceptsMarketing: !!r.accepts_marketing,
-  createdAt: r.created_at,
-});
-
 export const customerById = (d1: D1Database, id: string) => d1.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first<CustomerRow>();
-export const customerByEmail = (d1: D1Database, email: string) =>
-  d1.prepare('SELECT * FROM customers WHERE email = ?').bind(email.trim().toLowerCase()).first<CustomerRow>();
 
 export const addressDTO = (a: Record<string, unknown>): SavedAddressDTO => ({
   id: a.id as string,

@@ -1,6 +1,6 @@
 /**
  * Every field the courier needs, in the order you would say them out loud.
- * Used by the checkout and by the account's saved addresses.
+ * Used by the checkout.
  */
 import type { AddressDTO, StoreDTO } from '../../shared/api';
 import { AddressInput } from '../../shared/api';
@@ -84,10 +84,10 @@ export function AddressFields({ idPrefix, values, errors, onChange, countries, w
 
   return (
     <div className="co-fields">
-      <TextField {...input('name')} label="Full name" autoComplete="name" placeholder="Omar Naous" />
+      <TextField {...input('name')} label="Full name" autoComplete="name" placeholder="Your full name" />
       {withPhone && <TextField {...input('phone')} label="Phone" type="tel" autoComplete="tel" placeholder="+961 …" />}
       <TextField {...input('line1')} label="Area / street" autoComplete="address-line1" placeholder="Mar Mikhaël, Armenia St." />
-      <TextField {...input('line2')} label="Building, floor" autoComplete="address-line2" placeholder="Achkar bldg, 3rd floor" />
+      <TextField {...input('line2')} label="Building, floor" autoComplete="address-line2" placeholder="Building and floor" />
       <TextField {...input('city')} label="City" autoComplete="address-level2" placeholder="Beirut" />
       <TextField {...input('region')} label="Region" optional autoComplete="address-level1" placeholder="Optional" />
       <SelectField

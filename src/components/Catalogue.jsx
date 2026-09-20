@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import ProductCard from './ProductCard';
-import { CardSkeletons } from '../ui/Skeleton';
-import { featuredIn } from '../lib/catalog';
+import PieceCard, { PieceSkeletons } from './PieceCard';
+import ShelfTabs from './ShelfTabs';
+import { featuredIn, isColourOption } from '../lib/catalog';
 import { useCollection, useMoney, useProducts, useStore, useSuggest } from '../lib/queries';
 import { parseCatalogue } from '../lib/routes';
 import { useEscape, useLinger } from '../hooks/useSheet';
@@ -130,6 +130,30 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     return [...rows].filter(([, values]) => values.length > 0);
   }, [first, options]);
 
+  /* The category row, as the home page's shelves have it. A collection
+     reached by a link but not on the menu still gets a tab, so the row always
+     says where you are. */
+  const tabs = useMemo(() => {
+    const rows = (store?.menu ?? []).map((c) => ({ value: c.collectionHandle ?? 'all', label: c.label }));
+    if (!rows.some((t) => t.value === 'all')) rows.unshift({ value: 'all', label: 'All' });
+    if (!rows.some((t) => t.value === handle) && collection.data) rows.push({ value: handle, label: collection.data.title });
+    return rows;
+  }, [store?.menu, handle, collection.data]);
+
+  // a colour filter shows its colour: the swatch the pieces carry, else the name if CSS knows it
+  const swatches = useMemo(() => {
+    const m = new Map();
+    for (const p of results) {
+      for (const o of p.options) {
+        if (!isColourOption(o.name)) continue;
+        for (const v of o.values) if (v.swatch && !m.has(v.value.toLowerCase())) m.set(v.value.toLowerCase(), v.swatch);
+      }
+    }
+    return m;
+  }, [results]);
+  const dot = (value) =>
+    swatches.get(value.toLowerCase()) ?? (typeof CSS !== 'undefined' && CSS.supports('color', value) ? value : 'var(--sand)');
+
   const toggleOption = (name, value) => {
     const key = `${name}:${value}`;
     go({ options: options.includes(key) ? options.filter((o) => o !== key) : [...options, key] });
@@ -149,7 +173,7 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   };
 
   return (
-    // data-lenis-prevent so the results list and the chip rows still scroll on
+    // data-lenis-prevent so the results list and the option rows still scroll on
     // touch: a stopped Lenis preventDefaults every touchmove it sees.
     <div className={`cat ${open ? 'on' : ''}`} aria-hidden={!open} data-lenis-prevent>
       <div className="cat-bar shell">
@@ -161,10 +185,10 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
           <button className="label link-u" onClick={onClose} data-cursor="Close">Close</button>
         </div>
 
-        <div className="search">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.3" />
-            <path d="M11 11l4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <div className="cat-search">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M11 11l4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
           </svg>
           <input
             ref={input}
@@ -174,62 +198,59 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
             placeholder="Search — a name, a colour, a size, a fabric…"
             aria-label="Search the catalogue"
           />
-          {text && <button className="label link-u" onClick={() => setText('')}>Clear</button>}
+          {text && <button type="button" className="label link-u" onClick={() => setText('')}>Clear</button>}
         </div>
 
-        <div className="cat-controls">
-          <div className="filters left">
-            {(store?.menu ?? []).map((c) => {
-              const to = c.collectionHandle ?? 'all';
+        <ShelfTabs
+          options={tabs}
+          value={handle}
+          onChange={(to) => go({ options: [] }, to)}
+          controls="cat-results"
+          label="Categories"
+        />
+
+        <div className="cat-opts">
+          <div className="opts" role="group" aria-label="Refine">
+            <button type="button" className={`opt ${available ? 'on' : ''}`} aria-pressed={available} onClick={() => go({ available: !available })}>
+              In stock
+            </button>
+            {facets.map(([name, values]) => {
+              const colour = isColourOption(name);
               return (
-                <button
-                  key={to}
-                  className={`chip ${handle === to ? 'on' : ''}`}
-                  aria-pressed={handle === to}
-                  onClick={() => go({ options: [] }, to)}
-                >
-                  {c.label}
-                </button>
+                <React.Fragment key={name}>
+                  <span className="opt-name" aria-hidden="true">{name}</span>
+                  {values.map((value) => {
+                    const on = options.includes(`${name}:${value}`);
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`opt ${on ? 'on' : ''}`}
+                        aria-pressed={on}
+                        aria-label={`${name}: ${value}`}
+                        onClick={() => toggleOption(name, value)}
+                      >
+                        {colour && <i className="opt-dot" style={{ background: dot(value) }} aria-hidden="true" />}
+                        {value}
+                      </button>
+                    );
+                  })}
+                </React.Fragment>
               );
             })}
           </div>
-          <div className="filters right">
-            {sorts.map((s) => (
+          <div className="opts opts-sort" role="group" aria-label="Sort">
+            <span className="opt-name" aria-hidden="true">Sort</span>
+            {sorts.map((o) => (
               <button
-                key={s.key}
-                className={`chip ${sort === s.key ? 'on' : ''}`}
-                aria-pressed={sort === s.key}
-                onClick={() => go({ sort: s.key })}
+                key={o.key}
+                type="button"
+                className={`opt ${sort === o.key ? 'on' : ''}`}
+                aria-pressed={sort === o.key}
+                onClick={() => go({ sort: o.key })}
               >
-                {s.label}
+                {o.label}
               </button>
-            ))}
-          </div>
-          <div className="filters left cat-refine" aria-label="Refine">
-            <button
-              className={`chip ${available ? 'on' : ''}`}
-              aria-pressed={available}
-              onClick={() => go({ available: !available })}
-            >
-              In stock
-            </button>
-            {facets.map(([name, values]) => (
-              <React.Fragment key={name}>
-                <span className="label muted cat-facet">{name}</span>
-                {values.map((value) => {
-                  const on = options.includes(`${name}:${value}`);
-                  return (
-                    <button
-                      key={value}
-                      className={`chip ${on ? 'on' : ''}`}
-                      aria-pressed={on}
-                      onClick={() => toggleOption(name, value)}
-                    >
-                      {value}
-                    </button>
-                  );
-                })}
-              </React.Fragment>
             ))}
           </div>
         </div>
@@ -249,7 +270,7 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
         </div>
       </div>
 
-      <div className="cat-body shell">
+      <div className="cat-body shell" id="cat-results">
         {list.isError && !list.data ? (
           <div className="cat-empty" role="alert">
             <span className="display d-sm">The catalogue did not load.</span>
@@ -257,7 +278,7 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
             <button className="btn" onClick={() => list.refetch()}>Try again</button>
           </div>
         ) : list.isPending ? (
-          <div className="grid" aria-busy="true"><CardSkeletons count={8} /></div>
+          <div className="grid cat-grid" aria-busy="true"><PieceSkeletons count={8} /></div>
         ) : results.length === 0 ? (
           <div className="cat-empty">
             <span className="display d-sm">Nothing under that name.</span>
@@ -266,9 +287,15 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
           </div>
         ) : (
           <>
-            <div className="grid" aria-busy={list.isFetching}>
+            <div className="grid cat-grid" aria-busy={list.isFetching}>
+              {/* Results are the answer to a question that has just been
+                  asked: they come in together, not a scroll at a time. A
+                  reveal tied to the viewport left everything below the fold
+                  blank until it was scrolled to. */}
               {results.map((p, i) => (
-                <ProductCard key={p.id} product={p} index={i} onOpen={onOpen} showDrop={mixed} />
+                <div className="cat-in" key={p.id} style={{ '--n': i % 8 }}>
+                  <PieceCard product={p} index={i} onOpen={onOpen} showDrop={mixed} price />
+                </div>
               ))}
             </div>
             {(list.hasNextPage || list.isFetchNextPageError) && (

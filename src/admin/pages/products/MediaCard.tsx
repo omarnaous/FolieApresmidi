@@ -31,7 +31,8 @@ export function MediaCard({
         <ul className="adm-mediagrid">
           {media.map((m, i) => (
             <li key={m.id} className="adm-mediagrid__item">
-              <img src={imageSrc(m, 320)} alt={m.alt} loading="lazy" />
+              <img
+              decoding="async" src={imageSrc(m, 320)} alt={m.alt} loading="lazy" />
               {i === 0 && <span className="adm-mediagrid__cover">Cover</span>}
               {!m.alt && <span className="adm-mediagrid__warn">No alt text</span>}
               <div className="adm-mediagrid__tools">
@@ -94,7 +95,8 @@ function AltTextModal({ media, onClose, onSaved }: { media: MediaDTO; onClose: (
     >
       <form id={formId} className="adm-stack" onSubmit={submit}>
         <ErrorBanner error={save.error} />
-        <img src={imageSrc(media, 640)} alt="" className="adm-altpreview" />
+        <img
+              decoding="async" src={imageSrc(media, 640)} alt="" className="adm-altpreview" />
         <Textarea
           label="Alt text"
           rows={3}

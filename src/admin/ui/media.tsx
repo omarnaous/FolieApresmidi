@@ -10,6 +10,46 @@ import { Modal } from './Modal';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const BATCH = 20;
+/** Wide enough for the product page on a large screen at 2× pixel density. */
+const MAX_EDGE = 2000;
+
+/**
+ * Shrink a photograph before it is sent.
+ *
+ * A picture taken on a phone is four thousand pixels wide and several
+ * megabytes; a shopper looking at it needs neither. Where the shop has the
+ * paid image pipeline it would resize on the way out, but a shop without one
+ * serves exactly what was uploaded — so the browser does the work here, once,
+ * instead of every visitor paying for it on every view.
+ *
+ * Anything that will not decode — an unusual format, a browser without WebP —
+ * is handed back untouched and the server decides what to do with it.
+ */
+async function shrink(file: File): Promise<File> {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    // already small enough, and not heavy: leave it exactly as it is
+    if (scale === 1 && file.size <= 600 * 1024) {
+      bitmap.close();
+      return file;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.86));
+    if (!blob || blob.size >= file.size) return file;
+    const name = `${file.name.replace(/\.[a-z0-9]+$/i, '')}.webp`;
+    return new File([blob], name, { type: 'image/webp' });
+  } catch {
+    return file;
+  }
+}
 
 /** Drag & drop or pick images → POST /api/admin/media (field "files"). */
 export function ImageUploader({
@@ -45,10 +85,11 @@ export function ImageUploader({
     if (!chosen.length) return;
     setBusy(true);
     try {
+      const ready = await Promise.all(chosen.map(shrink));
       const uploaded: MediaDTO[] = [];
-      for (let i = 0; i < chosen.length; i += BATCH) {
+      for (let i = 0; i < ready.length; i += BATCH) {
         const fd = new FormData();
-        chosen.slice(i, i + BATCH).forEach((f) => fd.append('files', f));
+        ready.slice(i, i + BATCH).forEach((f) => fd.append('files', f));
         const res = await api<{ items: MediaDTO[] }>('/api/admin/media', { method: 'POST', body: fd });
         uploaded.push(...res.items);
       }
@@ -139,7 +180,8 @@ export function MediaLibraryModal({ open, onClose, onSelect }: { open: boolean; 
           {items.map((m) => (
             <li key={m.id}>
               <button type="button" className="adm-libgrid__item" onClick={() => pick(m)} aria-label={`Use ${m.alt || 'image'}`}>
-                <img src={imageSrc(m, 320)} alt="" loading="lazy" />
+                <img
+              decoding="async" src={imageSrc(m, 320)} alt="" loading="lazy" />
               </button>
             </li>
           ))}
@@ -156,14 +198,37 @@ export function MediaLibraryModal({ open, onClose, onSelect }: { open: boolean; 
   );
 }
 
-/** Single image slot: preview + choose/replace/remove. */
-export function SingleImageField({ label, value, onChange }: { label: string; value: MediaDTO | null; onChange: (m: MediaDTO | null) => void }) {
+/**
+ * Single image slot: preview + choose/replace/remove. `fallback` is what the
+ * storefront shows while the slot is empty; it previews dimmed, with `fallbackHint`.
+ */
+export function SingleImageField({
+  label,
+  value,
+  onChange,
+  fallback,
+  fallbackHint,
+}: {
+  label: string;
+  value: MediaDTO | null;
+  onChange: (m: MediaDTO | null) => void;
+  fallback?: MediaDTO | null;
+  fallbackHint?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="adm-field">
       <span className="adm-field__label">{label}</span>
       <div className="adm-singleimg">
-        {value ? <img src={imageSrc(value, 320)} alt={value.alt} /> : <span className="adm-thumb adm-thumb--empty adm-singleimg__empty" aria-hidden="true" />}
+        {value ? (
+          <img
+              decoding="async" src={imageSrc(value, 320)} alt={value.alt} />
+        ) : fallback ? (
+          <img
+              decoding="async" className="adm-singleimg__fallback" src={imageSrc(fallback, 320)} alt="" />
+        ) : (
+          <span className="adm-thumb adm-thumb--empty adm-singleimg__empty" aria-hidden="true" />
+        )}
         <div className="adm-row">
           <Button size="sm" onClick={() => setOpen(true)}>
             {value ? 'Replace' : 'Choose image'}
@@ -175,6 +240,7 @@ export function SingleImageField({ label, value, onChange }: { label: string; va
           )}
         </div>
       </div>
+      {!value && fallbackHint && <p className="adm-field__hint">{fallbackHint}</p>}
       <MediaLibraryModal open={open} onClose={() => setOpen(false)} onSelect={onChange} />
     </div>
   );

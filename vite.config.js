@@ -24,6 +24,7 @@ export default defineConfig({
       '/sitemap.xml': forward,
       '/robots.txt': forward,
       '/cart/recover': forward,
+      '/unsubscribe': forward,
     },
   },
   build: {

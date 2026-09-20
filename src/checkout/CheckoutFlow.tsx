@@ -191,11 +191,16 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
     // later refetch of it must not restart the checkout
   }, [cartReady, attempt]);
 
-  // the store arrived after the form was seeded: default the country
+  /* The store says where it ships, and it can land after the form does — so a
+     country nobody has chosen takes the store's own the moment one is known.
+     Watched rather than set once: opening the checkout seeds the address after
+     this runs, and a seed with no country of its own would leave the field
+     showing the only country on offer while the form held nothing — Continue
+     then refused an address that looked perfectly filled in. */
   useEffect(() => {
     if (!store) return;
     setAddress((a) => (a.countryCode ? a : { ...a, countryCode: defaultCountry(store) }));
-  }, [store]);
+  }, [store, address.countryCode]);
 
   const titleFor = (variantId: string) => co?.lines.find((l) => l.variantId === variantId)?.productTitle ?? 'A piece';
 
@@ -628,9 +633,7 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
           )}
 
           <PricingRows pricing={co.pricing} format={format} />
-          <span className="label muted co-ship">
-            Delivery in Lebanon. We confirm by phone before it ships.
-          </span>
+          <span className="label muted co-ship">Delivery in Lebanon.</span>
         </div>
       </aside>
     </div>

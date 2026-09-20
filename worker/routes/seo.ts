@@ -6,6 +6,7 @@ import { cacheTagHeader, TAGS } from '../lib/cache';
 import { COOKIES, writeCookie } from '../lib/cookies';
 import { sign, unsign } from '../lib/crypto';
 import { collectionDTO, listProducts, productByHandle } from '../services/catalog';
+import { emailFromToken, unsubscribe } from '../services/newsletter';
 import { getSettings, type StoreSettings } from '../services/settings';
 import type { AppEnv, Ctx } from '../types';
 import { schema } from '../db/client';
@@ -236,18 +237,52 @@ seo.get('/sitemap.xml', async (c) => {
 seo.get('/robots.txt', (c) => {
   const production = c.env.APP_ENV === 'production';
   const body = production
-    ? `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /account\nDisallow: /checkout\nDisallow: /orders/\nDisallow: /cart\n\nSitemap: ${c.env.APP_URL.replace(/\/$/, '')}/sitemap.xml\n`
+    ? `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /checkout\nDisallow: /unsubscribe/\nDisallow: /orders/\nDisallow: /cart\n\nSitemap: ${c.env.APP_URL.replace(/\/$/, '')}/sitemap.xml\n`
     : 'User-agent: *\nDisallow: /\n';
   return c.body(body, 200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' });
+});
+
+/**
+ * The one-click way off the list, from the foot of every newsletter. One
+ * page, no sign-in, no confirmation step — the link itself is the consent,
+ * and the address inside it is signed so it cannot be edited.
+ */
+seo.get('/unsubscribe/:token', async (c) => {
+  const email = await emailFromToken(decodeURIComponent(c.req.param('token')), c.env.COOKIE_SECRET);
+  const done = email ? await unsubscribe(c.env.DB, email) : false;
+  const settings = await getSettings(c.get('db'));
+  const title = done ? 'You are off the list.' : 'That link has expired.';
+  const line = done
+    ? `No more letters to ${escapeHtml(email!)}. Nothing else changes — your orders are untouched.`
+    : 'Write to us and we will take you off by hand.';
+  const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>${escapeHtml(title)} — ${escapeHtml(settings.name)}</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f2ede6;color:#0c0b0a;
+font-family:Inter,-apple-system,'Helvetica Neue',Arial,sans-serif;text-align:center;padding:24px}
+h1{font-family:'Instrument Serif','Times New Roman',serif;font-size:38px;font-weight:400;margin:0 0 14px}
+p{margin:0 0 26px;color:rgba(12,11,10,.8);line-height:1.6;max-width:44ch}
+a{color:#0c0b0a;font-size:11px;letter-spacing:.22em;text-transform:uppercase;text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:3px}</style></head>
+<body><main><h1>${escapeHtml(title)}</h1><p>${line}</p>
+${settings.contactEmail && !done ? `<p><a href="mailto:${escapeHtml(settings.contactEmail)}">${escapeHtml(settings.contactEmail)}</a></p>` : ''}
+<a href="/">Back to the boutique</a></main></body></html>`;
+  return c.body(body, done ? 200 : 404, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store',
+    'content-security-policy': PAGE_CSP,
+    'referrer-policy': 'no-referrer',
+    'x-content-type-options': 'nosniff',
+  });
 });
 
 /** Abandoned-cart links: restore the bag on this device, then open it. */
 seo.get('/cart/recover/:token', async (c) => {
   const value = await unsign(decodeURIComponent(c.req.param('token')), c.env.COOKIE_SECRET);
   const cartId = value?.startsWith('r.') ? value.slice(2) : null;
-  const cart = cartId ? await c.env.DB.prepare(`SELECT id, customer_id FROM carts WHERE id = ? AND status = 'active'`).bind(cartId).first<{ id: string; customer_id: string | null }>() : null;
+  // a cart from when the store had accounts cannot be restored to a guest
+  const cart = cartId
+    ? await c.env.DB.prepare(`SELECT id FROM carts WHERE id = ? AND status = 'active' AND customer_id IS NULL`).bind(cartId).first<{ id: string }>()
+    : null;
   if (!cart) return c.redirect('/', 302);
-  if (cart.customer_id) return c.redirect('/account/login?next=%2Fcart', 302);
   writeCookie(c, COOKIES.cart, await sign(cart.id, c.env.COOKIE_SECRET), { maxAge: 60 * 60 * 24 * 60 });
   c.header('cache-control', 'no-store');
   c.header('referrer-policy', 'no-referrer');

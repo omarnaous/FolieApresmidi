@@ -5,15 +5,12 @@
  *  The campaign film is the store's own footage, re-encoded for the
  *  web (9.4 MB → 304 KB; it is a locked-off plate, so it compresses
  *  hard). The pieces themselves come from the catalogue API, so the
- *  lookbook and the boutique can never drift apart.
+ *  home sections and the boutique can never drift apart.
  */
 
 /**
- * Campaign frames lifted from @folliesdapresmidi. Instagram serves a
- * logged-out grid at 640px, so the film frames them as plates rather
- * than running them full-bleed — at 30–45% of the frame they land at
- * roughly 1:1 and stay sharp, and the contact-sheet beat is sharper
- * still. Dates are the real post dates; they caption the sheet.
+ * Campaign frames lifted from @folliesdapresmidi, at the 640px Instagram
+ * serves a logged-out grid. Dates are the real post dates.
  */
 export const post = (code) => `https://www.instagram.com/p/${code}/`;
 
@@ -38,25 +35,29 @@ export const FEED = [
   { src: asset('media/ig/10-detail.jpg'),     w: 480, h: 640, date: '15.07.26', code: 'Da0rTC9ukIS', label: 'The stone' },
 ];
 
-const at = (code) => FEED.find((f) => f.code === code);
+/**
+ * The hero film: the campaign film from the Shopify storefront with the
+ * wordmark over it. Three cuts of the same 4:3 master (1440×1080, 25 fps,
+ * 11.5 s), audio stripped, and its last frame as a still — the film rests
+ * on the still (a paused video is not reliably painted) and falls back to
+ * it if the video cannot play. The figure and the tree sit in the lower
+ * right of the frame.
+ */
+export const OPENING = {
+  1080: asset('film/hero-1080.mp4'),
+  720: asset('film/hero-720.mp4'),
+  480: asset('film/hero-480.mp4'),
+  end: asset('film/hero-end.jpg'),
+};
 
-/** Act II — the frame that carries the first title card. */
-export const HERO_FRAME = at('DbGpzmZO8Wr');          // the orange bags
-
-/** Act III — the contact sheet. */
-export const SHEET = [
-  at('DbxwPwsKb_9'), at('DbBoCVuuRCL'), at('DboGWhBgsE3'),
-  at('DbyHFO2qH3Q'), at('DavkNIAuSb3'), at('DcWXIg6q6ZT'),
-];
-
-/** Act IV — three frames printed on paper. */
-export const PAPER = [at('Da0rTC9ukIS'), at('DavkNIAuSb3'), at('Db3uxqvOUTU')];
-
-/** Act V — the frame the wordmark sits over. */
-export const FINALE = at('DbxqBuiub7U');               // two at the car, night
-
-/** Held behind the preloader: the film's opening frames. */
-export const CRITICAL = [
-  HERO_FRAME.src,
-  ...SHEET.slice(0, 3).map((f) => f.src),
-];
+/**
+ * The house logo: the arched wordmark over "Beirut, Liban", drawn from the
+ * brand book's PDF. It is kept as an alpha mask — white pixels, the ink in
+ * the alpha channel — so the page paints it in whatever colour it is asked
+ * for (bone over the film, ink on paper) from one 35 KB file.
+ */
+export const LOGO = {
+  lockup: asset('brand/lockup.png'),
+  /** its own proportions, so the box never has to guess */
+  ratio: 1562 / 513,
+};

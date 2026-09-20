@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
-import { AdminCollectionInput, CollectionProductsInput, type AdminCollectionDTO } from '../../../shared/api';
+import { AdminCollectionInput, CollectionFlagsInput, CollectionOrderInput, CollectionProductsInput, type AdminCollectionDTO } from '../../../shared/api';
 import { parseJson } from '../../db/client';
 import { purge, TAGS } from '../../lib/cache';
-import { conflict, invalid, notFound } from '../../lib/errors';
+import { invalid, notFound } from '../../lib/errors';
 import { slugify, ulid } from '../../lib/ids';
 import { sanitizeHtml } from '../../lib/sanitize';
 import { json } from '../../lib/validate';
 import { staffOnly } from '../../middleware/session';
 import { adminProductListItems } from '../../services/admin-products';
 import { audit } from '../../services/audit';
-import { rematerialize, type RuleSet } from '../../services/collections';
+import type { RuleSet } from '../../services/collections';
 import { mediaById } from '../../services/media';
 import type { AppEnv, Ctx } from '../../types';
 
@@ -59,15 +59,13 @@ adminCollections.post('/collections', staffOnly('products:write'), json(AdminCol
   const now = Date.now();
   const id = ulid(now);
   const handle = await handleFor(d1, input.handle ?? input.title, id, !!input.handle);
-  if (input.type === 'smart' && input.rules.conditions.length === 0) throw invalid({ rules: 'Add at least one condition' });
   await d1
     .prepare(
       `INSERT INTO collections (id, handle, title, description_html, type, rules_json, sort, image_media_id, published, seo_title, seo_description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, 'manual', '{"match":"all","conditions":[]}', ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, handle, input.title, await sanitizeHtml(input.descriptionHtml), input.type, JSON.stringify(input.rules), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, now, now)
+    .bind(id, handle, input.title, await sanitizeHtml(input.descriptionHtml), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, now, now)
     .run();
-  if (input.type === 'smart') await rematerialize(d1, id);
   invalidate(c, id);
   await audit(c, 'collection.created', 'collection', id, `Created collection "${input.title}"`);
   return c.json(await toDTO(c, (await d1.prepare('SELECT * FROM collections WHERE id = ?').bind(id).first<Record<string, unknown>>())!), 201);
@@ -93,23 +91,32 @@ adminCollections.get('/collections/:id', staffOnly('products:read'), async (c) =
   return c.json({ ...(await toDTO(c, row)), products: await adminProductListItems(d1, results) });
 });
 
+/** The order of the category row, as the collections screen arranges it. */
+adminCollections.put('/collections/order', staffOnly('products:write'), json(CollectionOrderInput), async (c) => {
+  const d1 = c.env.DB;
+  const wanted = [...new Set(c.req.valid('json').handles)];
+  /* Only the order is kept: the shop names each category after its collection,
+     and a collection the screen did not mention falls in after these. */
+  const order = wanted.map((handle) => ({ label: handle, collectionHandle: handle }));
+  await d1.prepare('UPDATE store_settings SET menu_json = ?, updated_at = ? WHERE id = 1').bind(JSON.stringify(order), Date.now()).run();
+  purge(c.executionCtx, [TAGS.catalog, TAGS.collections]);
+  return c.body(null, 204);
+});
+
 adminCollections.put('/collections/:id', staffOnly('products:write'), json(AdminCollectionInput), async (c) => {
   const input = c.req.valid('json');
   const d1 = c.env.DB;
   const id = c.req.param('id');
   const row = await d1.prepare('SELECT * FROM collections WHERE id = ?').bind(id).first<Record<string, unknown>>();
   if (!row) throw notFound('Collection not found');
-  if (row.type !== input.type) throw conflict('A collection cannot change between manual and smart — create a new one');
-  if (input.type === 'smart' && input.rules.conditions.length === 0) throw invalid({ rules: 'Add at least one condition' });
   const handle = await handleFor(d1, input.handle ?? (row.handle as string), id, !!input.handle && input.handle !== row.handle);
   await d1
     .prepare(
-      `UPDATE collections SET handle = ?, title = ?, description_html = ?, rules_json = ?, sort = ?, image_media_id = ?, published = ?, seo_title = ?, seo_description = ?, updated_at = ?
+      `UPDATE collections SET handle = ?, title = ?, description_html = ?, sort = ?, image_media_id = ?, published = ?, seo_title = ?, seo_description = ?, updated_at = ?
         WHERE id = ?`,
     )
-    .bind(handle, input.title, await sanitizeHtml(input.descriptionHtml), JSON.stringify(input.rules), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, Date.now(), id)
+    .bind(handle, input.title, await sanitizeHtml(input.descriptionHtml), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, Date.now(), id)
     .run();
-  if (input.type === 'smart') await rematerialize(d1, id);
   invalidate(c, id);
   await audit(c, 'collection.updated', 'collection', id, `Updated collection "${input.title}"`);
   return c.json(await toDTO(c, (await d1.prepare('SELECT * FROM collections WHERE id = ?').bind(id).first<Record<string, unknown>>())!));
@@ -118,9 +125,8 @@ adminCollections.put('/collections/:id', staffOnly('products:write'), json(Admin
 adminCollections.put('/collections/:id/products', staffOnly('products:write'), json(CollectionProductsInput), async (c) => {
   const d1 = c.env.DB;
   const id = c.req.param('id');
-  const row = await d1.prepare('SELECT type, title FROM collections WHERE id = ?').bind(id).first<{ type: string; title: string }>();
+  const row = await d1.prepare('SELECT title FROM collections WHERE id = ?').bind(id).first<{ title: string }>();
   if (!row) throw notFound('Collection not found');
-  if (row.type !== 'manual') throw conflict('Smart collections choose their own products');
   const ids = [...new Set(c.req.valid('json').productIds)];
   const payload = JSON.stringify(ids.map((pid, i) => ({ p: pid, i })));
   await d1.batch([
@@ -136,6 +142,24 @@ adminCollections.put('/collections/:id/products', staffOnly('products:write'), j
   invalidate(c, id);
   await audit(c, 'collection.products_set', 'collection', id, `Set ${ids.length} products in "${row.title}"`);
   return c.body(null, 204);
+});
+
+/**
+ * The switches on the collections screen: whether it is on the site at all,
+ * and whether it stands on the row of categories.
+ */
+adminCollections.patch('/collections/:id', staffOnly('products:write'), json(CollectionFlagsInput), async (c) => {
+  const d1 = c.env.DB;
+  const id = c.req.param('id');
+  const { published } = c.req.valid('json');
+  const row = await d1.prepare('SELECT * FROM collections WHERE id = ?').bind(id).first<Record<string, unknown>>();
+  if (!row) throw notFound('Collection not found');
+
+  await d1.prepare('UPDATE collections SET published = ?, updated_at = ? WHERE id = ?').bind(published ? 1 : 0, Date.now(), id).run();
+  row.published = published ? 1 : 0;
+  invalidate(c, id);
+  await audit(c, 'collection.updated', 'collection', id, `Updated collection "${row.title as string}"`);
+  return c.json(await toDTO(c, row));
 });
 
 adminCollections.delete('/collections/:id', staffOnly('products:write'), async (c) => {

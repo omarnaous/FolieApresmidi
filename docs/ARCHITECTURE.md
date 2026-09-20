@@ -23,7 +23,7 @@ Scanned at `7678853` (main), 2026-09-15.
 |---|---|
 | Framework | React 19.3 + Vite 8, **plain JavaScript/JSX**, no TypeScript. `@remotion/player` renders the hero film live; Lenis drives smooth scroll. |
 | Routing | **None.** One page. Sections are hash anchors (`src/data/sections.js`). Product page, catalogue, bag, checkout and mobile menu are full-screen overlays toggled by `useState` in `App.jsx` (`quick`, `catalogue`, `checkout`, `menu`), with a single `locked` flag for scroll. No URL exists for a product or collection, so nothing is deep-linkable or indexable. |
-| Components | `src/components/`, one file per section. Commerce: `Shop` (home grid, first 10), `Catalogue` (full-screen search, category chips, sort), `ProductCard`, `ProductPage` (variant picker, related), `CartDrawer`, `Checkout` (single-step form), `Newsletter`. Content: `Hero` + `remotion/`, `Marquee`, `Feed`, `Editorial`, `Lookbook`, `PopUps`, `Nav`, `MobileMenu`, `Footer`, `Preloader`, `Cursor`, `Reveal`. |
+| Components | `src/components/`, one file per section. Commerce: `Shop` (home grid, first 10), `Catalogue` (full-screen search, category tabs, refine and sort), `PieceCard` (the one product card — home rails and the catalogue grid), `ProductPage` (variant picker, `ShopTheLook`), `CartDrawer`, `Checkout` (single-step form), `Newsletter`. Content: `Hero` + `remotion/`, `Marquee`, `Feed`, `Editorial`, `PopUps`, `Nav`, `MobileMenu`, `Footer`, `Preloader`, `Cursor`, `Reveal`. |
 | State | `src/store/cart.jsx`: React Context + `useReducer`, persisted to `localStorage` (`fdm.bag.v1`). Lines are keyed `productId::size::colour` and snapshot name, **price** and image on the client. No variant id on the line. No server-state library; everything else is local component state. |
 | Design system | `src/styles.css` (1,422 lines). Tokens `--ink --bone --sand --terra --chili --sage --ash`, Instrument Serif + Inter, `.display .d-xl…d-sm`, `.label`, `.btn`, `.chip`, `.plate.packshot`, `.co-*` form/sheet styles, drawer and overlay patterns. No CSS framework or component library. |
 | API client | `src/lib/api.js`: `post()` with a 12 s timeout; treats a non-JSON reply as "offline" so the GitHub Pages copy falls back to `mailto:`. |
@@ -80,7 +80,7 @@ Scanned at `7678853` (main), 2026-09-15.
 
 ```mermaid
 flowchart LR
-  B[Browser<br/>React SPA · /account · /admin chunk] -->|same origin| W
+  B[Browser<br/>React SPA · /admin chunk] -->|same origin| W
   subgraph W[Worker fdm · Hono]
     A[static assets<br/>Vite dist]
     API["/api/* routers"]
@@ -111,7 +111,7 @@ worker/
   index.ts               fetch / queue / scheduled entry
   app.ts                 Hono app; middleware order: requestId → secureHeaders → errors → session → csrf → rateLimit → rbac
   env.ts                 Bindings type
-  routes/                store · cart · checkout · auth · account · admin/* · webhooks · seo · media
+  routes/                store · cart · checkout · session (CSRF) · admin/* · webhooks · seo · media
   domain/                pure, framework-free: pricing · discounts · tax · shipping · inventory · order-state
   payments/              provider.ts (interface) · registry.ts · stripe.ts · cod.ts · whish-manual.ts
   db/                    schema/*.ts · client.ts · queries/
@@ -119,7 +119,7 @@ worker/
   email/                 resend.ts · templates/
   lib/                   crypto · money · errors · cache · csv · slug · ids
 src/                     existing storefront, plus router.jsx, lib/api.ts (Hono RPC client),
-                         account/*, checkout steps, admin/* (lazy-loaded)
+                         checkout steps, admin/* (lazy-loaded)
 scripts/                 import-shopify.ts · seed.ts · create-owner.ts
 test/                    unit/ · integration/ (Vitest + @cloudflare/vitest-pool-workers)
 ```
@@ -170,20 +170,21 @@ Business logic consumes only the normalized `PaymentEvent` (`payment.succeeded |
 **Order state.** `status`: `pending → paid → fulfilled → shipped → delivered`, terminal `cancelled` and `refunded`, exactly your list. A separate `payment_status` (`unpaid | paid | partially_refunded | refunded`) handles partial refunds and COD, where cash arrives after delivery. All changes go through `transitionOrder()`, which checks an allowed-transitions table and writes the `order_events` row in the same batch. A trigger makes `order_events` append-only (`RAISE(ABORT)` on UPDATE/DELETE).
 
 **Auth and sessions.**
-- **Accounts:** customers and staff live in separate tables with separate cookies (`__Host-fdm_s` Lax, `__Host-fdm_admin` Strict), so no customer flow can reach a staff record.
-- **Sessions:** a random 32-byte token goes in the cookie; KV stores it under `sess:<sha256(token)>` with a TTL (30 days sliding for customers, 12 hours for staff).
+- **No customer accounts.** Shoppers check out as guests; there is no sign-up or sign-in on the storefront, and the API has no register, login or `/api/account` routes. `GET /api/auth/session` only hands out the CSRF token. Orders still create or update a `customers` row by email, which is what the admin's Customers page lists. The customer password, address and wishlist tables are kept, unused, with whatever they held from before.
+- **Staff only:** staff sign in to `/admin` with email and password; the cookie is `__Host-fdm_admin`, Strict.
+- **Sessions:** a random 32-byte token goes in the cookie; KV stores it under `sess:staff:<sha256(token)>` with a 12-hour sliding TTL.
 - **Revocation:** logout, password change and role change bump `session_epoch`.
-- **Tokens:** email verification, password reset and staff invites are single-use, hashed and expiring rows in `auth_tokens`.
+- **Tokens:** staff password reset and staff invites are single-use, hashed and expiring rows in `auth_tokens`.
 
 **CSRF.** SameSite cookies, Hono's `csrf()` Origin check, and a per-session token sent as `x-csrf-token` on every non-GET request. Webhooks are exempt (signature instead).
 
 **Rate limits.**
-- **Login:** 5/min per IP and per email.
-- **Register and reset:** 3/min per IP, plus a D1 check capping resets at 3 per 15 minutes.
+- **Admin login:** 5/min per IP and per email.
+- **Admin password reset:** 3/min per IP, plus a D1 check capping resets at 3 per 15 minutes.
 - **Checkout:** 10/min per IP.
 - **Everything else:** a general API ceiling.
 
-Cloudflare Turnstile on register and reset is optional.
+Cloudflare Turnstile on the admin's reset form is optional.
 
 **Validation and errors.** Zod on every body, query and param (`@hono/zod-validator`). One error shape:
 ```json
@@ -211,7 +212,7 @@ Conventions: `id TEXT` ULIDs; `*_at INTEGER` unix ms; `*_amount INTEGER` minor u
 ### Store
 | Table | Columns (key constraints) |
 |---|---|
-| `store_settings` | `id=1` singleton · name · currency (ISO 4217) · prices_include_tax · logo_media_id · contact_email · contact_phone · address_json · timezone · weight_unit · updated_at |
+| `store_settings` | `id=1` singleton · name · currency (ISO 4217) · prices_include_tax · logo_media_id · contact_email · contact_phone · address_json · timezone · weight_unit · menu_json · home_json (the whole home page: section order, names and visibility, the film, the ribbon, each section's words, the floors, the notebook, the pop-ups, the footer) · size_chart_json · newsletter_welcome_code · updated_at |
 | `pages` | id · handle UNIQUE · kind (`policy`/`page`) · title · body_html (sanitized) · published · seo_title · seo_description · updated_at |
 | `media` | id · r2_key UNIQUE · mime · bytes · width · height · alt · created_by · created_at |
 
@@ -238,7 +239,8 @@ Conventions: `id TEXT` ULIDs; `*_at INTEGER` unix ms; `*_amount INTEGER` minor u
 | `staff_users` | id · email UNIQUE NOCASE · password_hash · name · role CHECK(`owner`/`admin`/`staff`) · permissions_json (staff only: `products:write`, `orders:refund`, …) · status (`invited`/`active`/`disabled`) · session_epoch · last_login_at · timestamps |
 | `auth_tokens` | id · subject_type · subject_id · purpose (`verify_email`/`reset_password`/`staff_invite`) · token_hash UNIQUE · expires_at · used_at |
 | `wishlist_items` | id · customer_id FK cascade · product_id FK cascade · created_at · UNIQUE(customer_id, product_id) |
-| `subscribers` | email PK · customer_id NULL · source · status · unsubscribe_token_hash · created_at |
+| `subscribers` | email PK · customer_id NULL · source · status · welcome_sent_at (one code per address) · created_at · updated_at. Unsubscribe links carry the address signed with `COOKIE_SECRET`, so no token is stored |
+| `newsletter_campaigns` | id · subject · body_html (sanitised) · status (sending/sent) · recipients · sent_count · staff_id · created_at · sent_at. Sent in batches of 50 by a `newsletter.batch` queue job that hands on to the next batch |
 
 ### Cart and checkout
 | Table | Columns |
@@ -296,9 +298,13 @@ GET    /api/checkout/:id/shipping-rates
 POST   /api/checkout/:id/pay            { provider } → redirect | placed
 GET    /api/orders/confirmation/:token
 
-Auth / account
-POST /api/auth/{register,login,logout,verify-email,forgot-password,reset-password}   GET /api/auth/session
-GET|PATCH /api/account   GET /api/account/orders[/:number]   CRUD /api/account/addresses   GET|POST|DELETE /api/account/wishlist
+Session (no customer accounts)
+GET /api/auth/session   → the CSRF token
+
+Newsletter
+POST /api/subscribe  (the home page form; a new address is emailed the welcome code)
+GET  /unsubscribe/:token   one click off the list, from the foot of every letter
+GET|PUT /api/admin/newsletter[/welcome]   POST /api/admin/newsletter/{test,send}
 
 Webhooks      POST /api/webhooks/:provider
 Admin (RBAC)  /api/admin/{auth,dashboard,products,variants,media,collections,orders,customers,discounts,shipping,taxes,settings,pages,staff,imports,exports}
@@ -315,12 +321,11 @@ SEO / media   /products/:handle  /collections/:handle  /sitemap.xml  /robots.txt
 | `store/cart.jsx` | Same context shape (`lines`, `count`, `subtotal`, `add`, `qty`, `remove`, `toast`), backed by the server cart with optimistic updates. `add()` resolves the variant id |
 | `Shop`, `Catalogue` | Products and chips from the API. Size/colour/price/in-stock filters use the existing `.chip` row. "See all" and load-more use the existing `.more` pattern |
 | `ProductCard` | Compare-at price (one small strikethrough rule in `styles.css`), live sold-out |
-| `ProductPage` | Product by handle; option picks resolve a variant; live stock; swatches from option values; related from the collection; exchange copy from the policy page; "Save" wishlist link in `.label link-u` |
+| `ProductPage` | Product by handle; option picks resolve a variant; live stock; swatches from option values; `ShopTheLook` at the foot (`GET /api/products/:handle/look` — the pieces paired in the admin product editor, else suggestions from other categories in the same collections); `SizeChart` under the size buttons (the shop's one chart, from settings, hidden until it has numbers); exchange copy from the policy page |
 | `CartDrawer` | Server subtotal and stock warnings; otherwise unchanged |
 | `Checkout` | Same `.co` sheet, now in steps: contact & address (existing fields) → shipping method → payment (existing `.co-pay` radios, providers from the API). The summary gains discount code, shipping and tax lines. Confirmation reuses `.co-done` at `/orders/confirmation/:token` |
-| `Lookbook`, `Editorial`, `Preloader`, `Footer` | Collections, settings and pages from the API |
-| `Nav`, `MobileMenu` | One "Account" link in the existing label style |
-| New: account | Full-screen sheet in the `.co`/`.pdp` pattern: login, register, verify, reset, orders, order detail, addresses, wishlist |
+| `Editorial`, `Preloader`, `Footer` | Collections, settings and pages from the API |
+| `Nav`, `MobileMenu` | Sections, Search and Bag — no Account link: the store has no customer accounts. The section links come from `src/data/sections.js` (`useSections`), which drops any section switched off in the admin's Home page and numbers the rest from 02 |
 | New: `/admin` | Lazy chunk, same tokens and type (bone paper, ink, `.label`, `.chip`, `.btn`); tables and forms built from existing tokens |
 
 ---

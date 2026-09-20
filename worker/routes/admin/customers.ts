@@ -19,7 +19,6 @@ const listItem = (r: CustomerRow): AdminCustomerListItemDTO => ({
   ordersCount: r.orders_count,
   totalSpent: r.total_spent_amount,
   acceptsMarketing: !!r.accepts_marketing,
-  hasAccount: !!r.password_hash,
   createdAt: r.created_at,
   lastOrderAt: r.last_order_at,
 });
@@ -60,7 +59,6 @@ async function detail(d1: D1Database, db: Parameters<typeof adminOrderListItems>
   const counted = orderRows.filter((o) => o.status !== 'cancelled');
   return {
     ...listItem(row),
-    emailVerified: !!row.email_verified_at,
     note: row.note,
     averageOrderValue: counted.length ? Math.round(row.total_spent_amount / counted.length) : 0,
     addresses: (addresses?.results ?? []).map(addressDTO),

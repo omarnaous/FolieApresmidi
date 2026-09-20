@@ -61,22 +61,11 @@ const SORT_LABELS: Record<CollectionSort, string> = {
   title_asc: 'Title, A–Z',
 };
 
-interface Condition {
-  key: string;
-  field: CollectionRuleField;
-  op: CollectionRuleOp;
-  /** price: cents as a string */
-  value: string;
-}
-
 interface CollectionDraft {
   title: string;
   handle: string;
   handleTouched: boolean;
   descriptionHtml: string;
-  type: 'manual' | 'smart';
-  match: 'all' | 'any';
-  conditions: Condition[];
   sort: CollectionSort;
   image: MediaDTO | null;
   published: boolean;
@@ -84,16 +73,11 @@ interface CollectionDraft {
   seoDescription: string;
 }
 
-const newCondition = (): Condition => ({ key: clientKey('c'), field: 'tag', op: 'eq', value: '' });
-
 const fromDTO = (c: AdminCollectionDTO): CollectionDraft => ({
   title: c.title,
   handle: c.handle,
   handleTouched: true,
   descriptionHtml: c.descriptionHtml,
-  type: c.type,
-  match: c.rules.match,
-  conditions: c.rules.conditions.map((r) => ({ key: clientKey('c'), ...r })),
   sort: c.sort,
   image: c.image,
   published: c.published,
@@ -106,9 +90,6 @@ const emptyDraft = (): CollectionDraft => ({
   handle: '',
   handleTouched: false,
   descriptionHtml: '',
-  type: 'manual',
-  match: 'all',
-  conditions: [newCondition()],
   sort: 'manual',
   image: null,
   published: true,
@@ -146,11 +127,10 @@ function CollectionForm({ collection, currency }: { collection: AdminCollectionD
   const [picking, setPicking] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const productsDirty = draft.type === 'manual' && !sameJson(baseProducts.map((p) => p.id), products.map((p) => p.id));
+  const productsDirty = !sameJson(baseProducts.map((p) => p.id), products.map((p) => p.id));
   const dirty = !sameJson(base, draft) || productsDirty;
   useUnsavedChanges(dirty && canWrite);
   const set = <K extends keyof CollectionDraft>(k: K, v: CollectionDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const setCondition = (key: string, patch: Partial<Condition>) => set('conditions', draft.conditions.map((c) => (c.key === key ? { ...c, ...patch } : c)));
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: qk.collections });
@@ -204,8 +184,6 @@ function CollectionForm({ collection, currency }: { collection: AdminCollectionD
       title: draft.title,
       handle: draft.handle.trim() || undefined,
       descriptionHtml: draft.descriptionHtml,
-      type: draft.type,
-      rules: draft.type === 'smart' ? { match: draft.match, conditions: draft.conditions.map(({ field, op, value }) => ({ field, op, value })) } : { match: 'all', conditions: [] },
       sort: draft.sort,
       imageId: draft.image?.id ?? null,
       published: draft.published,
@@ -213,10 +191,9 @@ function CollectionForm({ collection, currency }: { collection: AdminCollectionD
       seoDescription: draft.seoDescription.trim() || null,
     };
     const errs = validate(AdminCollectionInput, payload) ?? {};
-    if (draft.type === 'smart' && draft.conditions.length === 0) errs['rules.conditions'] = 'Add at least one condition';
     setErrors(errs);
     if (Object.keys(errs).length) return window.scrollTo({ top: 0 });
-    save.mutate({ payload, productIds: draft.type === 'manual' && (productsDirty || (isNew && products.length > 0)) ? products.map((p) => p.id) : null });
+    save.mutate({ payload, productIds: productsDirty || (isNew && products.length > 0) ? products.map((p) => p.id) : null });
   };
 
   return (
@@ -256,118 +233,19 @@ function CollectionForm({ collection, currency }: { collection: AdminCollectionD
               </div>
             </Card>
 
-            <Card title="Collection type">
-              <ChoiceGroup
-                label="How products are added"
-                value={draft.type}
-                disabled={!isNew}
-                onChange={(type) => setDraft((d) => ({ ...d, type, sort: type === 'manual' ? 'manual' : d.sort === 'manual' ? 'created_desc' : d.sort }))}
-                options={[
-                  { value: 'manual', label: 'Manual', description: 'Pick products one by one and set their order.' },
-                  { value: 'smart', label: 'Smart', description: 'Products that match your conditions are added automatically.' },
-                ]}
-              />
-              {!isNew && <p className="adm-field__hint">The type can't be changed after the collection is created.</p>}
-            </Card>
-
-            {draft.type === 'smart' ? (
-              <Card title="Conditions">
-                <div className="adm-stack">
-                  <ChoiceGroup
-                    label="Products must match"
-                    value={draft.match}
-                    onChange={(match) => set('match', match)}
-                    options={[
-                      { value: 'all', label: 'All conditions' },
-                      { value: 'any', label: 'Any condition' },
-                    ]}
-                  />
-                  <ol className="adm-rules">
-                    {draft.conditions.map((c, i) => (
-                      <li key={c.key} className="adm-rule">
-                        <Select
-                          label={`Condition ${i + 1} field`}
-                          labelHidden
-                          value={c.field}
-                          error={errors[`rules.conditions.${i}.field`]}
-                          onChange={(e) => {
-                            const field = e.target.value as CollectionRuleField;
-                            setCondition(c.key, { field, op: FIELD_OPS[field][0] ?? 'eq', value: field === 'in_stock' ? 'true' : '' });
-                          }}
-                        >
-                          {(Object.keys(FIELD_LABELS) as CollectionRuleField[]).map((f) => (
-                            <option key={f} value={f}>
-                              {FIELD_LABELS[f]}
-                            </option>
-                          ))}
-                        </Select>
-                        <Select
-                          label={`Condition ${i + 1} operator`}
-                          labelHidden
-                          value={c.op}
-                          error={errors[`rules.conditions.${i}.op`]}
-                          onChange={(e) => setCondition(c.key, { op: e.target.value as CollectionRuleOp })}
-                        >
-                          {FIELD_OPS[c.field].map((op) => (
-                            <option key={op} value={op}>
-                              {c.field === 'in_stock' ? 'is' : OP_LABELS[op]}
-                            </option>
-                          ))}
-                        </Select>
-                        {c.field === 'price' ? (
-                          <MoneyInput
-                            label={`Condition ${i + 1} price`}
-                            labelHidden
-                            currency={currency}
-                            value={c.value === '' ? null : Number(c.value)}
-                            error={errors[`rules.conditions.${i}.value`]}
-                            onChange={(cents) => setCondition(c.key, { value: cents === null ? '' : String(cents) })}
-                          />
-                        ) : c.field === 'in_stock' ? (
-                          <Select label={`Condition ${i + 1} value`} labelHidden value={c.value || 'true'} onChange={(e) => setCondition(c.key, { value: e.target.value })}>
-                            <option value="true">True</option>
-                            <option value="false">False</option>
-                          </Select>
-                        ) : (
-                          <TextInput
-                            label={`Condition ${i + 1} value`}
-                            labelHidden
-                            value={c.value}
-                            maxLength={120}
-                            error={errors[`rules.conditions.${i}.value`]}
-                            onChange={(e) => setCondition(c.key, { value: e.target.value })}
-                          />
-                        )}
-                        <IconButton label={`Remove condition ${i + 1}`} tone="danger" onClick={() => set('conditions', draft.conditions.filter((x) => x.key !== c.key))}>
-                          <IconTrash />
-                        </IconButton>
-                      </li>
-                    ))}
-                  </ol>
-                  {errors['rules.conditions'] && <p className="adm-field__error">{errors['rules.conditions']}</p>}
-                  {draft.conditions.length < 20 && (
-                    <div>
-                      <Button size="sm" icon={<IconPlus size={14} />} onClick={() => set('conditions', [...draft.conditions, newCondition()])}>
-                        Add condition
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ) : (
-              <Card
-                title={`Products · ${products.length}`}
-                flush
-                actions={
-                  <Button size="sm" icon={<IconPlus size={14} />} onClick={() => setPicking(true)}>
-                    Add products
-                  </Button>
-                }
-              >
-                {products.length === 0 ? (
-                  <EmptyState compact title="No products in this collection" body="Add products to curate the collection." action={<Button variant="primary" onClick={() => setPicking(true)}>Add products</Button>} />
-                ) : (
-                  <ol className="adm-orderlist">
+            <Card
+              title={`Products · ${products.length}`}
+              flush
+              actions={
+                <Button size="sm" icon={<IconPlus size={14} />} onClick={() => setPicking(true)}>
+                  Add products
+                </Button>
+              }
+            >
+              {products.length === 0 ? (
+                <EmptyState compact title="No products in this collection" body="Choose the pieces that belong here." action={<Button variant="primary" onClick={() => setPicking(true)}>Add products</Button>} />
+              ) : (
+                <ol className="adm-orderlist">
                     {products.map((p, i) => (
                       <li key={p.id} className="adm-orderlist__item">
                         <span className="adm-orderlist__pos">{i + 1}</span>
@@ -390,18 +268,22 @@ function CollectionForm({ collection, currency }: { collection: AdminCollectionD
                       </li>
                     ))}
                   </ol>
-                )}
-              </Card>
-            )}
+              )}
+            </Card>
           </div>
 
           <div className="adm-split__side">
             <Card title="Visibility">
-              <Toggle label="Published" hint="Hidden collections are not shown in the store." checked={draft.published} onChange={(v) => set('published', v)} />
+              <Toggle
+                label="Available"
+                hint="On the shop as one of its categories. Switched off, it keeps its pieces but leaves the site."
+                checked={draft.published}
+                onChange={(v) => set('published', v)}
+              />
             </Card>
             <Card title="Sorting">
               <Select label="Sort products by" value={draft.sort} error={errors.sort} onChange={(e) => set('sort', e.target.value as CollectionSort)}>
-                {COLLECTION_SORTS.filter((s) => draft.type === 'manual' || s !== 'manual').map((s) => (
+                {COLLECTION_SORTS.map((s) => (
                   <option key={s} value={s}>
                     {SORT_LABELS[s]}
                   </option>

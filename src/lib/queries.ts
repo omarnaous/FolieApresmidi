@@ -3,33 +3,22 @@
  * in shared/api.ts. Components never call fetch themselves.
  */
 import { useCallback } from 'react';
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AvailabilityDTO,
   CartDTO,
   CollectionDTO,
-  CustomerDTO,
+  LookDTO,
   OrderDTO,
-  OrderSummaryDTO,
-  Page,
   PageDTO,
   ProductDTO,
   ProductListDTO,
   ProductSort,
-  SavedAddressDTO,
   SearchSuggestDTO,
-  SessionDTO,
   StoreDTO,
 } from '../../shared/api';
 import { formatMoney } from '../../shared/money';
-import { del, get, patch, post } from './api';
+import { get } from './api';
 
 /* ── keys ───────────────────────────────────────────────── */
 
@@ -48,18 +37,12 @@ export const qk = {
   products: (q: ProductQuery) => ['products', 'infinite', q] as const,
   product: (handle: string) => ['product', handle] as const,
   availability: (handle: string) => ['availability', handle] as const,
-  related: (handle: string) => ['related', handle] as const,
+  look: (handle: string) => ['look', handle] as const,
   collection: (handle: string) => ['collection', handle] as const,
   suggest: (q: string) => ['suggest', q] as const,
   page: (handle: string) => ['page', handle] as const,
   order: (token: string) => ['order', token] as const,
-  session: ['session'] as const,
   cart: ['cart'] as const,
-  account: ['account'] as const,
-  accountOrders: ['account', 'orders'] as const,
-  accountOrder: (number: string) => ['account', 'order', number] as const,
-  addresses: ['account', 'addresses'] as const,
-  wishlist: ['account', 'wishlist'] as const,
 };
 
 /** The home grid's request. The preloader asks for the same one, so it warms the grid rather than racing it. */
@@ -70,11 +53,18 @@ export const homeGridQuery = (collection: string | null | undefined): ProductQue
 
 /* ── store & catalog ────────────────────────────────────── */
 
+/**
+ * The shop itself: its name, menus, and everything the owner writes on the
+ * website management screen. Held for a minute and read again when the tab
+ * comes back into focus, so a change saved in the admin shows up on an open
+ * page rather than only on the next visit.
+ */
 export const useStore = () =>
   useQuery({
     queryKey: qk.store,
     queryFn: ({ signal }) => get<StoreDTO>('/api/store', undefined, signal),
-    staleTime: 10 * 60_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 
 /** Formats minor units in the store's currency (USD until the store has loaded). */
@@ -91,6 +81,23 @@ export const useProductList = (query: ProductQuery, { enabled = true } = {}) =>
     enabled,
     placeholderData: keepPreviousData,
   });
+
+/**
+ * Warm the cache for a product list before it is asked for — the home tabs
+ * call this on hover and focus, so the pick itself is served from cache.
+ */
+export function usePrefetchProductList() {
+  const client = useQueryClient();
+  return useCallback(
+    (query: ProductQuery) =>
+      void client.prefetchQuery({
+        queryKey: qk.productList(query),
+        queryFn: ({ signal }) => get<ProductListDTO>('/api/products', query, signal),
+        staleTime: 60_000,
+      }),
+    [client],
+  );
+}
 
 export const useProducts = (query: ProductQuery, { enabled = true } = {}) =>
   useInfiniteQuery({
@@ -124,11 +131,11 @@ export const useAvailability = (handle: string | null | undefined, open: boolean
     refetchInterval: open ? 30_000 : false,
   });
 
-export const useRelated = (handle: string | null | undefined) =>
+/** Shop the look under a product: the owner's pairing, or the store's suggestions. */
+export const useLook = (handle: string | null | undefined) =>
   useQuery({
-    queryKey: qk.related(handle ?? ''),
-    queryFn: ({ signal }) =>
-      get<{ items: ProductDTO[] }>(`/api/products/${encodeURIComponent(handle ?? '')}/related`, undefined, signal),
+    queryKey: qk.look(handle ?? ''),
+    queryFn: ({ signal }) => get<LookDTO>(`/api/products/${encodeURIComponent(handle ?? '')}/look`, undefined, signal),
     enabled: !!handle,
   });
 
@@ -171,157 +178,3 @@ export const useCartQuery = () =>
     queryKey: qk.cart,
     queryFn: ({ signal }) => get<CartDTO>('/api/cart', undefined, signal),
   });
-
-/* ── session & auth ─────────────────────────────────────── */
-
-export const useSession = () =>
-  useQuery({
-    queryKey: qk.session,
-    queryFn: ({ signal }) => get<SessionDTO>('/api/auth/session', undefined, signal),
-    staleTime: 5 * 60_000,
-  });
-
-/**
- * Who is signed in changed: the cart may have merged, and nothing read for
- * the previous customer may be shown to the next one. Account reads are
- * dropped rather than refetched — they only mount for a signed-in customer,
- * and fetch afresh when they do.
- */
-function afterSessionChange(client: QueryClient) {
-  void client.invalidateQueries({ queryKey: qk.cart });
-  client.removeQueries({ queryKey: qk.account });
-}
-
-function useSessionMutation<I>(path: string) {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: I) => post<SessionDTO>(path, input),
-    onSuccess: (session) => {
-      client.setQueryData(qk.session, session);
-      afterSessionChange(client);
-    },
-  });
-}
-
-export const useLogin = () => useSessionMutation<{ email: string; password: string }>('/api/auth/login');
-export const useRegister = () =>
-  useSessionMutation<{ email: string; password: string; name: string; acceptsMarketing: boolean }>('/api/auth/register');
-export const useResetPassword = () => useSessionMutation<{ token: string; password: string }>('/api/auth/reset-password');
-export const useVerifyEmail = () => useSessionMutation<{ token: string }>('/api/auth/verify-email');
-
-export function useLogout() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: () => post<void>('/api/auth/logout'),
-    onSuccess: () => {
-      client.setQueryData<SessionDTO>(qk.session, (s) => (s ? { ...s, customer: null } : s));
-      // a fresh read hands back a CSRF token for the anonymous session
-      void client.invalidateQueries({ queryKey: qk.session });
-      afterSessionChange(client);
-    },
-  });
-}
-
-export const useForgotPassword = () =>
-  useMutation({ mutationFn: (input: { email: string }) => post<void>('/api/auth/forgot-password', input) });
-
-export const useResendVerification = () =>
-  useMutation({ mutationFn: () => post<void>('/api/auth/resend-verification') });
-
-/* ── account ────────────────────────────────────────────── */
-
-export function useUpdateAccount() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { name?: string; phone?: string | null; acceptsMarketing?: boolean }) =>
-      patch<CustomerDTO>('/api/account', input),
-    onSuccess: (customer) => {
-      client.setQueryData<SessionDTO>(qk.session, (s) => (s ? { ...s, customer } : s));
-    },
-  });
-}
-
-export function useChangePassword() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { currentPassword: string; newPassword: string }) => post<void>('/api/account/password', input),
-    onSuccess: () => void client.invalidateQueries({ queryKey: qk.session }),
-  });
-}
-
-export const useAccountOrders = ({ enabled = true } = {}) =>
-  useInfiniteQuery({
-    queryKey: qk.accountOrders,
-    queryFn: ({ pageParam, signal }) =>
-      get<Page<OrderSummaryDTO>>('/api/account/orders', { cursor: pageParam }, signal),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-    enabled,
-  });
-
-export const useAccountOrder = (number: string | null | undefined) =>
-  useQuery({
-    queryKey: qk.accountOrder(number ?? ''),
-    queryFn: ({ signal }) => get<OrderDTO>(`/api/account/orders/${encodeURIComponent(number ?? '')}`, undefined, signal),
-    enabled: !!number,
-  });
-
-export const useAddresses = ({ enabled = true } = {}) =>
-  useQuery({
-    queryKey: qk.addresses,
-    queryFn: ({ signal }) => get<{ items: SavedAddressDTO[] }>('/api/account/addresses', undefined, signal),
-    enabled,
-  });
-
-export type SavedAddressBody = Omit<SavedAddressDTO, 'id'>;
-
-export function useSaveAddress() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, input }: { id: string | null; input: SavedAddressBody }) =>
-      id
-        ? patch<SavedAddressDTO>(`/api/account/addresses/${encodeURIComponent(id)}`, input)
-        : post<SavedAddressDTO>('/api/account/addresses', input),
-    onSuccess: () => void client.invalidateQueries({ queryKey: qk.addresses }),
-  });
-}
-
-export function useDeleteAddress() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => del<void>(`/api/account/addresses/${encodeURIComponent(id)}`),
-    onSuccess: () => void client.invalidateQueries({ queryKey: qk.addresses }),
-  });
-}
-
-export const useWishlist = ({ enabled = true } = {}) =>
-  useQuery({
-    queryKey: qk.wishlist,
-    queryFn: ({ signal }) => get<{ items: ProductDTO[] }>('/api/account/wishlist', undefined, signal),
-    enabled,
-  });
-
-/** Save or unsave a piece; the list updates at once and settles against the server. */
-export function useWishlistToggle() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ product, saved }: { product: ProductDTO; saved: boolean }) =>
-      saved
-        ? del<void>(`/api/account/wishlist/${encodeURIComponent(product.id)}`)
-        : post<void>('/api/account/wishlist', { productId: product.id }),
-    onMutate: async ({ product, saved }) => {
-      await client.cancelQueries({ queryKey: qk.wishlist });
-      const before = client.getQueryData<{ items: ProductDTO[] }>(qk.wishlist);
-      if (before) {
-        client.setQueryData(qk.wishlist, {
-          items: saved ? before.items.filter((p) => p.id !== product.id) : [product, ...before.items],
-        });
-      }
-      return { before };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.before) client.setQueryData(qk.wishlist, ctx.before);
-    },
-    onSettled: () => void client.invalidateQueries({ queryKey: qk.wishlist }),
-  });
-}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ApiError, type OrderStatus, type PaymentStatus, type ProductStatus } from '../lib/contract';
 import { pathLabel, type FieldErrors } from '../lib/forms';
 import { ORDER_STATUS_META, PAYMENT_STATUS_META, PRODUCT_STATUS_META, type Tone } from '../lib/format';
@@ -72,13 +72,30 @@ export const errorMessage = (err: unknown): string => {
   return err instanceof Error ? err.message : 'Something went wrong.';
 };
 
-/** Server or network failure: message, field list and request id. */
+/**
+ * Server or network failure: message, field list and request id.
+ *
+ * It brings itself into view. A form long enough to scroll — the shipping
+ * rate, a product, the website — puts its Save at the bottom and this at the
+ * top, so a refusal used to appear on a part of the screen nobody was
+ * looking at: the button did nothing, as far as the eye could tell. Now the
+ * page comes to the message.
+ */
 export function ErrorBanner({ error, title, onRetry, className }: { error: unknown; title?: string; onRetry?: () => void; className?: string }) {
+  const seen = useRef<unknown>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!error || seen.current === error) return;
+    seen.current = error;
+    // 'nearest' so a banner already on screen does not move the page at all
+    box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [error]);
+
   if (!error) return null;
   const apiErr = error instanceof ApiError ? error : null;
   const fields = apiErr ? Object.entries(apiErr.fields) : [];
   return (
-    <div className={cx('adm-banner', 'adm-banner--danger', className)} role="alert">
+    <div ref={box} className={cx('adm-banner', 'adm-banner--danger', className)} role="alert">
       <div className="adm-banner__body">
         {title && <p className="adm-banner__title">{title}</p>}
         <p>{errorMessage(error)}</p>

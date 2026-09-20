@@ -29,6 +29,14 @@ function DialogShell({ open, onClose, title, children, footer, dismissible = tru
   closeRef.current = onClose;
   const dismissibleRef = useRef(dismissible);
   dismissibleRef.current = dismissible;
+  /* True while we are the ones closing it. `close` is the same event whether
+     a person pressed Escape or the code called close(), and the difference
+     matters: React runs an effect's cleanup and then the effect again on
+     mount in development, so the cleanup's close() was being read as "the
+     user dismissed this" and unmounting the dialog a few milliseconds after
+     it opened. The event is queued, not synchronous, so the flag is lowered
+     by the handler that receives it rather than here. */
+  const selfClosing = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -38,7 +46,10 @@ function DialogShell({ open, onClose, title, children, footer, dismissible = tru
     const autofocus = dialog.querySelector<HTMLElement>('[data-autofocus]');
     autofocus?.focus();
     return () => {
-      if (dialog.open) dialog.close();
+      if (dialog.open) {
+        selfClosing.current = true;
+        dialog.close();
+      }
       opener?.focus();
     };
   }, [open]);
@@ -57,6 +68,11 @@ function DialogShell({ open, onClose, title, children, footer, dismissible = tru
         if (e.target === e.currentTarget && dismissible) closeRef.current();
       }}
       onClose={(e) => {
+        // our own close(), from the effect above: nothing to tell React
+        if (selfClosing.current) {
+          selfClosing.current = false;
+          return;
+        }
         // The browser can force-close on a repeated Escape; keep React in charge.
         const dialog = e.currentTarget;
         if (!dialog.isConnected) return;

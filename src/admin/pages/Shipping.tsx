@@ -17,7 +17,7 @@ import { countryName } from '../lib/format';
 import { qk, useShippingZones, useStore } from '../lib/queries';
 import { clientKey } from '../lib/util';
 import { Button, IconButton } from '../ui/Button';
-import { Badge, EmptyState, errorMessage, ErrorBanner, QueryState } from '../ui/feedback';
+import { Badge, EmptyState, errorMessage, ErrorBanner, FormErrorSummary, QueryState } from '../ui/feedback';
 import { Checkbox, ChoiceGroup, MoneyInput, NumberInput, TextInput, Toggle } from '../ui/form';
 import { IconEdit, IconPlus, IconTrash } from '../ui/icons';
 import { Card, PageHeader } from '../ui/layout';
@@ -46,6 +46,17 @@ export function conditionSummary(r: Pick<ShippingRateDTO, 'type' | 'minValue' | 
   if (max !== null) return `Up to ${kg(max)} kg`;
   return 'Any weight';
 }
+
+/**
+ * A zone called Lebanon that delivers to Lebanon has nothing to add: the
+ * list of countries under it would just say the title again. It is printed
+ * only where it tells you something the name does not — more than one
+ * country, or a region inside one.
+ */
+const nameSaysItAll = (zone: ShippingZoneDTO): boolean =>
+  zone.regions.length === 1
+  && !zone.regions[0]!.regionCode
+  && countryName(zone.regions[0]!.countryCode).trim().toLowerCase() === zone.name.trim().toLowerCase();
 
 const toRateInput = (r: ShippingRateDTO, patch: Partial<RateInput> = {}): RateInput => ({
   name: r.name,
@@ -139,14 +150,18 @@ export default function ShippingPage() {
                 </>
               }
             >
-              <ul className="adm-chiplist adm-card__pad" aria-label={`Regions in ${zone.name}`}>
-                {zone.regions.map((r) => (
-                  <li key={`${r.countryCode}-${r.regionCode ?? ''}`} className="adm-chip adm-chip--static" title={countryName(r.countryCode)}>
-                    {r.countryCode}
-                    {r.regionCode ? ` — ${r.regionCode}` : ''}
-                  </li>
-                ))}
-              </ul>
+              {/* the countries in their own names: an owner reads "Lebanon", not "LB" */}
+              {!nameSaysItAll(zone) && (
+                <ul className="adm-chiplist adm-card__pad" aria-label={`Where ${zone.name} delivers`}>
+                  <li className="adm-chiplist__label label">Delivers to</li>
+                  {zone.regions.map((r) => (
+                    <li key={`${r.countryCode}-${r.regionCode ?? ''}`} className="adm-chip adm-chip--static" title={r.countryCode}>
+                      {countryName(r.countryCode)}
+                      {r.regionCode ? ` — ${r.regionCode}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {zone.rates.length === 0 ? (
                 <EmptyState compact title="No rates in this zone" body="Customers in these regions can't check out until you add a rate." />
               ) : (
@@ -257,6 +272,8 @@ function ZoneModal({ zone, onClose, onSaved }: { zone: ShippingZoneDTO | null; o
     >
       <form id={formId} className="adm-stack" onSubmit={submit} noValidate>
         <ErrorBanner error={save.error} />
+        {/* every refusal, including any that belongs to no field on screen */}
+        <FormErrorSummary errors={save.error ? {} : errors} />
         <TextInput label="Zone name" value={name} maxLength={80} error={errors.name} placeholder="Lebanon, GCC…" onChange={(e) => setName(e.target.value)} data-autofocus />
         <fieldset className="adm-regionrows">
           <legend className="adm-field__label">Regions</legend>
@@ -264,12 +281,13 @@ function ZoneModal({ zone, onClose, onSaved }: { zone: ShippingZoneDTO | null; o
           {regions.map((r, i) => (
             <div key={r.key} className="adm-regionrow">
               <TextInput
-                label={`Country code ${i + 1}`}
+                label={`Country ${i + 1}`}
                 value={r.countryCode}
                 maxLength={2}
                 placeholder="LB"
                 error={errors[`regions.${i}.countryCode`]}
-                hint={r.countryCode.length === 2 ? countryName(r.countryCode) : undefined}
+                /* two letters, but the name is what tells you it is right */
+                hint={r.countryCode.length === 2 ? countryName(r.countryCode) : 'Two-letter code — LB, AE, FR'}
                 onChange={(e) => update(r.key, { countryCode: e.target.value.toUpperCase() })}
               />
               <TextInput label={`Region ${i + 1}`} optional value={r.regionCode} maxLength={80} error={errors[`regions.${i}.regionCode`]} onChange={(e) => update(r.key, { regionCode: e.target.value })} />
@@ -353,6 +371,10 @@ function RateModal({ zone, rate, currency, onClose, onSaved }: { zone: ShippingZ
     >
       <form id={formId} className="adm-stack" onSubmit={submit} noValidate>
         <ErrorBanner error={save.error} />
+        {/* Price, name and the bounds show their own message; type, active and
+            anything the form itself refuses had nowhere to appear, so a save
+            could stop dead without a word. Everything is listed here. */}
+        <FormErrorSummary errors={save.error ? {} : errors} />
         <TextInput label="Rate name" value={draft.name} maxLength={80} error={errors.name} placeholder="Standard delivery" hint="Shown to customers at checkout." onChange={(e) => set('name', e.target.value)} data-autofocus />
         <ChoiceGroup
           label="Rate type"

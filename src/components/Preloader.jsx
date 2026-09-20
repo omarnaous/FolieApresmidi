@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { imageSrc } from '../../shared/api';
-import { CRITICAL } from '../data/assets';
 import { homeGridQuery, useProductList } from '../lib/queries';
 
 const MIN_MS = 1500;
@@ -30,8 +29,6 @@ export default function Preloader({ onDone }) {
 
   useEffect(() => {
     let cancelled = false;
-    load(CRITICAL, () => !cancelled && setLoaded((n) => n + 1));
-
     // never hold the door longer than 4s, whatever the network does
     const bail = setTimeout(() => !cancelled && setBailed(true), 4000);
     const giveUp = setTimeout(() => setWarm((w) => w ?? []), API_MS);
@@ -54,8 +51,9 @@ export default function Preloader({ onDone }) {
     return () => { cancelled = true; };
   }, [warm]);
 
-  const total = CRITICAL.length + (warm === null ? WARM : warm.length);
-  const pct = bailed ? 100 : Math.min(100, Math.round((loaded / total) * 100));
+  // the hero film is video and streams on its own; the door only waits on the grid
+  const total = warm === null ? WARM : warm.length;
+  const pct = bailed || total === 0 ? 100 : Math.min(100, Math.round((loaded / total) * 100));
 
   useEffect(() => {
     if (pct < 100) return;

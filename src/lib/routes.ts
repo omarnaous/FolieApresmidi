@@ -7,7 +7,9 @@
  *              stays open underneath it
  *   depth      how many entries deep inside the same sheet we are, so Close
  *              steps back past all of them in one go
- *   notice     a one-off line for the screen the navigation lands on
+ *
+ * There are no account pages: the store has no customer accounts, and an
+ * old /account link lands on the home page.
  */
 import { useCallback } from 'react';
 import { matchPath, useLocation, useNavigate } from 'react-router';
@@ -19,7 +21,6 @@ export type Route =
   | { kind: 'cart' }
   | { kind: 'checkout' }
   | { kind: 'order'; token: string }
-  | { kind: 'account' }
   | { kind: 'page'; handle: string };
 
 export function parseRoute(pathname: string): Route {
@@ -31,7 +32,6 @@ export function parseRoute(pathname: string): Route {
   if (at('/checkout')) return { kind: 'checkout' };
   const order = at('/orders/:token');
   if (order?.params.token) return { kind: 'order', token: order.params.token };
-  if (matchPath({ path: '/account/*' }, pathname)) return { kind: 'account' };
   const page = at('/pages/:handle');
   if (page?.params.handle) return { kind: 'page', handle: page.params.handle };
   return { kind: 'home' };
@@ -40,8 +40,6 @@ export function parseRoute(pathname: string): Route {
 export interface SheetState {
   catalogue?: string;
   depth?: number;
-  /** a line to show once where the navigation lands, e.g. after a password reset */
-  notice?: string;
 }
 
 export const sheetState = (state: unknown): SheetState =>
@@ -76,10 +74,6 @@ export function useSheetNavigate() {
     [navigate, location.state],
   );
 }
-
-/** Only same-site paths are followed after a sign-in. */
-export const safeNext = (next: string | null | undefined): string | null =>
-  next && next.startsWith('/') && !next.startsWith('//') ? next : null;
 
 /** `/collections/dresses?q=…` or `/search?q=…` → which collection, and the rest of the query. */
 export function parseCatalogue(path: string): { base: string; handle: string; params: URLSearchParams } {

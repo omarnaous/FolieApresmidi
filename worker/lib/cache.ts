@@ -19,8 +19,13 @@ export const TAGS = {
 
 export const cacheTagHeader = (...tags: string[]) => ({ 'cache-tag': [...new Set(tags)].join(',') });
 
-/** Public, edge-cacheable for a few minutes; browsers revalidate quickly. */
-export const PUBLIC_CACHE = 'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
+/**
+ * Public and cached at the edge for a few minutes, where a write purges it by
+ * tag — but never held by the browser: `max-age=0` means a shopper's reload
+ * always asks again, so a change made in the admin is on the site at once
+ * rather than up to a minute later.
+ */
+export const PUBLIC_CACHE = 'public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600';
 
 /** The part of an execution context background work needs (Hono's and the runtime's both fit). */
 export interface BackgroundCtx {

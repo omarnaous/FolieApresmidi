@@ -121,7 +121,6 @@ export default function StaffPage() {
     mutationFn: (s: StaffDTO) => del<void>(`/api/admin/staff/${s.id}`),
     onSuccess: (_d, s) => {
       void qc.invalidateQueries({ queryKey: qk.staff });
-      void qc.invalidateQueries({ queryKey: qk.audit });
       toast.success(`${s.name} removed`);
       setRemoving(null);
     },
@@ -325,7 +324,6 @@ function EditStaffModal({ staff, onClose }: { staff: StaffDTO; onClose: () => vo
     mutationFn: (body: { name: string; role: 'admin' | 'staff'; permissions: Permission[]; status?: 'active' | 'disabled' }) => patch<StaffDTO>(`/api/admin/staff/${staff.id}`, body),
     onSuccess: (dto) => {
       void qc.invalidateQueries({ queryKey: qk.staff });
-      void qc.invalidateQueries({ queryKey: qk.audit });
       toast.success(`${dto.name} updated`);
       onClose();
     },

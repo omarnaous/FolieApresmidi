@@ -11,7 +11,6 @@ export const isSecure = (c: Ctx): boolean => new URL(c.req.url).protocol === 'ht
 const nameFor = (c: Ctx, base: string) => (isSecure(c) ? `__Host-${base}` : base);
 
 export const COOKIES = {
-  customerSession: 'fdm_s',
   staffSession: 'fdm_admin',
   csrf: 'fdm_csrf',
   cart: 'fdm_cart',

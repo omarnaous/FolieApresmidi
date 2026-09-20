@@ -1,4 +1,4 @@
-import type { AdminProductDTO, AdminProductInput, AdminProductListItemDTO, AdminVariantDTO, MediaDTO, ProductOptionDTO } from '../../shared/api';
+import type { AdminLookPieceDTO, AdminProductDTO, AdminProductInput, AdminProductListItemDTO, AdminVariantDTO, MediaDTO, ProductOptionDTO } from '../../shared/api';
 import type { z } from 'zod';
 import type { AdminProductInput as AdminProductInputSchema } from '../../shared/api';
 import { constraintName, invalid, notFound } from '../lib/errors';
@@ -47,7 +47,7 @@ async function uniqueHandle(d1: D1Database, wanted: string, productId: string | 
 /**
  * Create or replace a product in one batch: row, options, variants (stock
  * changes recorded as adjustments), media order, tags, manual collections,
- * and its search document. Returns the product id.
+ * its look, and its search document. Returns the product id.
  */
 export async function saveProductCore(d1: D1Database, id: string | null, input: ProductInput, staffId: string | null, reason: 'manual' | 'import' = 'manual'): Promise<string> {
   const now = Date.now();
@@ -72,6 +72,15 @@ export async function saveProductCore(d1: D1Database, id: string | null, input: 
       .bind(...input.collectionIds.slice(0, 90))
       .all<{ id: string }>();
     manualCollections = results.map((r) => r.id);
+  }
+  const look = input.lookProductIds;
+  if (look?.includes(productId)) throw invalid({ lookProductIds: 'A piece cannot complete its own look' });
+  if (look?.length) {
+    const { results } = await d1
+      .prepare(`SELECT id FROM products WHERE id IN (${look.map(() => '?').join(',')})`)
+      .bind(...look)
+      .all<{ id: string }>();
+    if (results.length !== look.length) throw invalid({ lookProductIds: 'Some of these pieces no longer exist — remove them and save again' });
   }
 
   const { results: currentVariants } = await d1.prepare('SELECT * FROM variants WHERE product_id = ?').bind(productId).all<VariantRow>();
@@ -175,6 +184,14 @@ export async function saveProductCore(d1: D1Database, id: string | null, input: 
     );
   }
 
+  // left out means "as it was", so an import never wipes a look
+  if (look) {
+    statements.push(d1.prepare('DELETE FROM product_looks WHERE product_id = ?').bind(productId));
+    look.forEach((lookId, i) =>
+      statements.push(d1.prepare('INSERT INTO product_looks (product_id, look_product_id, position) VALUES (?, ?, ?)').bind(productId, lookId, i)),
+    );
+  }
+
   statements.push(...reindexStatements(d1, [productId]));
 
   try {
@@ -195,7 +212,7 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
   const p = await d1.prepare('SELECT * FROM products WHERE id = ?').bind(id).first<Record<string, unknown>>();
   if (!p) throw notFound('Product not found');
   const now = Date.now();
-  const [options, values, variants, media, tags, collections, reserved] = await d1.batch<Record<string, unknown>>([
+  const [options, values, variants, media, tags, collections, reserved, look] = await d1.batch<Record<string, unknown>>([
     d1.prepare('SELECT * FROM product_options WHERE product_id = ? ORDER BY position').bind(id),
     d1.prepare('SELECT v.* FROM product_option_values v JOIN product_options o ON o.id = v.option_id WHERE o.product_id = ? ORDER BY v.position').bind(id),
     d1.prepare('SELECT * FROM variants WHERE product_id = ? ORDER BY position').bind(id),
@@ -205,6 +222,14 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
     d1
       .prepare('SELECT r.variant_id, SUM(r.quantity) AS n FROM inventory_reservations r JOIN variants v ON v.id = r.variant_id WHERE v.product_id = ? AND r.expires_at > ? GROUP BY r.variant_id')
       .bind(id, now),
+    d1
+      .prepare(
+        `SELECT p.id, p.handle, p.title, p.status,
+                (SELECT pm.media_id FROM product_media pm WHERE pm.product_id = p.id ORDER BY pm.position LIMIT 1) AS media_id
+           FROM product_looks l JOIN products p ON p.id = l.look_product_id
+          WHERE l.product_id = ? ORDER BY l.position`,
+      )
+      .bind(id),
   ]);
 
   const optionRows = (options?.results ?? []) as { id: string; name: string }[];
@@ -215,6 +240,8 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
       .map((v) => ({ value: v.value, swatch: v.swatch })),
   }));
   const reservedBy = new Map(((reserved?.results ?? []) as { variant_id: string; n: number }[]).map((r) => [r.variant_id, r.n]));
+  const lookRows = (look?.results ?? []) as { id: string; handle: string; title: string; status: AdminLookPieceDTO['status']; media_id: string | null }[];
+  const lookMedia = await mediaByIdsRaw(d1, lookRows.map((r) => r.media_id ?? ''));
 
   return {
     id,
@@ -251,6 +278,7 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
       (m): MediaDTO => toMediaDTO({ id: m.id as string, r2Key: m.r2_key as string, alt: m.alt as string, width: (m.width as number | null) ?? null, height: (m.height as number | null) ?? null }),
     ),
     collections: ((collections?.results ?? []) as { id: string; title: string; type: 'manual' | 'smart' }[]).map((c) => ({ id: c.id, title: c.title, type: c.type })),
+    look: lookRows.map((r) => ({ id: r.id, handle: r.handle, title: r.title, status: r.status, image: r.media_id ? lookMedia.get(r.media_id) ?? null : null })),
     publishedAt: (p.published_at as number | null) ?? null,
     createdAt: p.created_at as number,
     updatedAt: p.updated_at as number,
@@ -288,6 +316,8 @@ export function deleteProductStatements(d1: D1Database, ids: string[]): D1Prepar
       `DELETE FROM product_media WHERE product_id IN (${marks})`,
       `DELETE FROM product_tags WHERE product_id IN (${marks})`,
       `DELETE FROM collection_products WHERE product_id IN (${marks})`,
+      `DELETE FROM product_looks WHERE product_id IN (${marks})`,
+      `DELETE FROM product_looks WHERE look_product_id IN (${marks})`,
       `DELETE FROM wishlist_items WHERE product_id IN (${marks})`,
       `DELETE FROM products_fts WHERE product_id IN (${marks})`,
       `DELETE FROM products WHERE id IN (${marks})`,

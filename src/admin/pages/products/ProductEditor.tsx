@@ -10,13 +10,14 @@ import { useCan } from '../../lib/session';
 import { sameJson, slugify } from '../../lib/util';
 import { Button, ButtonLink } from '../../ui/Button';
 import { Banner, ErrorBanner, FormErrorSummary, ProductStatusBadge, QueryState } from '../../ui/feedback';
-import { Select, TagInput, TextInput } from '../../ui/form';
+import { Select, TextInput } from '../../ui/form';
 import { HtmlField } from '../../ui/HtmlField';
 import { IconExternal } from '../../ui/icons';
 import { Card, PageHeader, SaveBar } from '../../ui/layout';
 import { ConfirmDialog } from '../../ui/Modal';
 import { SeoCard } from '../../ui/SeoCard';
 import { useToast } from '../../ui/Toasts';
+import { LookCard } from './LookCard';
 import { MediaCard } from './MediaCard';
 import { OptionsCard } from './OptionsCard';
 import { buildPayload, emptyDraft, fromDTO, syncVariants, type OptionDraft, type ProductDraft } from './productDraft';
@@ -113,8 +114,6 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
     save.mutate(payload);
   };
 
-  const smart = product?.collections.filter((c) => c.type === 'smart') ?? [];
-
   return (
     <>
       <PageHeader
@@ -172,6 +171,8 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
             <OptionsCard options={draft.options} errors={errors} onChange={setOptions} />
 
             <VariantsCard variants={draft.variants} media={draft.media} currency={currency} errors={errors} onChange={(variants) => set('variants', variants)} />
+
+            <LookCard pieces={draft.look} productId={product?.id ?? null} error={errors.lookProductIds} onChange={(look) => set('look', look)} />
           </div>
 
           <div className="adm-split__side">
@@ -188,15 +189,7 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
               </p>
             </Card>
 
-            <Card title="Organisation">
-              <div className="adm-stack">
-                <TextInput label="Product type" value={draft.productType} maxLength={80} error={errors.productType} placeholder="Dress, Shirt…" onChange={(e) => set('productType', e.target.value)} />
-                <TextInput label="Vendor" optional value={draft.vendor} maxLength={80} error={errors.vendor} onChange={(e) => set('vendor', e.target.value)} />
-                <TagInput label="Tags" value={draft.tags} max={50} error={errors.tags} onChange={(tags) => set('tags', tags)} />
-              </div>
-            </Card>
-
-            <CollectionsCard selected={draft.collectionIds} smart={smart} onChange={(ids) => set('collectionIds', ids)} />
+            <CollectionsCard selected={draft.collectionIds} onChange={(ids) => set('collectionIds', ids)} />
 
             <SeoCard
               pathPrefix="/products/"
@@ -231,23 +224,24 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
   );
 }
 
-function CollectionsCard({ selected, smart, onChange }: { selected: string[]; smart: { id: string; title: string }[]; onChange: (ids: string[]) => void }) {
+/** Which collections this piece belongs to. Every collection is a list someone picks by hand. */
+function CollectionsCard({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
   const collections = useCollections();
   const [filter, setFilter] = useState('');
-  const manual = (collections.data ?? []).filter((c) => c.type === 'manual');
-  const shown = manual.filter((c) => c.title.toLowerCase().includes(filter.trim().toLowerCase()));
+  const all = collections.data ?? [];
+  const shown = all.filter((c) => c.title.toLowerCase().includes(filter.trim().toLowerCase()));
   return (
     <Card title="Collections">
       {collections.error ? (
         <ErrorBanner error={collections.error} onRetry={() => void collections.refetch()} />
       ) : collections.isPending ? (
         <p className="adm-muted">Loading collections…</p>
-      ) : manual.length === 0 ? (
-        <p className="adm-muted">No manual collections yet.</p>
+      ) : all.length === 0 ? (
+        <p className="adm-muted">No collections yet.</p>
       ) : (
         <fieldset className="adm-checklist">
-          <legend className="adm-sr">Manual collections</legend>
-          {manual.length > 8 && <TextInput label="Filter collections" labelHidden type="search" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />}
+          <legend className="adm-sr">Collections</legend>
+          {all.length > 8 && <TextInput label="Filter collections" labelHidden type="search" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />}
           <ul className="adm-checklist__list">
             {shown.map((c) => (
               <li key={c.id}>
@@ -263,20 +257,6 @@ function CollectionsCard({ selected, smart, onChange }: { selected: string[]; sm
             ))}
           </ul>
         </fieldset>
-      )}
-      {smart.length > 0 && (
-        <>
-          <hr className="adm-hr" />
-          <p className="adm-label adm-muted">Matched automatically</p>
-          <ul className="adm-chiplist">
-            {smart.map((c) => (
-              <li key={c.id} className="adm-chip adm-chip--static">
-                {c.title}
-              </li>
-            ))}
-          </ul>
-          <p className="adm-field__hint">Smart collections pick products by their rules.</p>
-        </>
       )}
     </Card>
   );

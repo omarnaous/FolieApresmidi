@@ -107,24 +107,6 @@ export function CartProvider({ children }) {
     [change],
   );
 
-  /** Resolves to what is wrong with the code, or null when it applied. */
-  const applyDiscount = useCallback(async (code) => {
-    try {
-      const next = await send(() => post('/api/cart/discount', { code }));
-      return next.discountError;
-    } catch (err) {
-      return messageFor(err, 'That code did not apply.');
-    }
-  }, [send]);
-
-  const removeDiscount = useCallback(async () => {
-    try {
-      await send(() => del('/api/cart/discount'));
-    } catch (err) {
-      setToast(messageFor(err));
-    }
-  }, [send]);
-
   const openCart = useCallback(() => setOpen(true), []);
   const closeCart = useCallback(() => setOpen(false), []);
 
@@ -139,12 +121,10 @@ export function CartProvider({ children }) {
     add,
     qty,
     remove,
-    applyDiscount,
-    removeDiscount,
     notify: setToast,
     openCart,
     closeCart,
-  }), [cart, open, toast, pending, add, qty, remove, applyDiscount, removeDiscount, openCart, closeCart]);
+  }), [cart, open, toast, pending, add, qty, remove, openCart, closeCart]);
 
   return <CartCtx.Provider value={value}>{children}</CartCtx.Provider>;
 }

@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import Reveal from './Reveal';
 import { imageSrc } from '../../shared/api';
-import { eyebrow } from '../data/sections';
+import Notebook from './Notebook';
+import { useEyebrow } from '../data/sections';
+import { emphasis } from '../lib/emphasis';
 import { srcSet } from '../lib/catalog';
-import { useMoney, useProductList, useStore } from '../lib/queries';
+import { useProductList, useStore } from '../lib/queries';
 
 const shot = (p, sizes) =>
   p.images[0] ? (
     <img
+              decoding="async"
       src={imageSrc(p.images[0], 960)}
       srcSet={srcSet(p.images[0], [640, 960, 1400])}
       sizes={sizes}
@@ -17,14 +20,63 @@ const shot = (p, sizes) =>
   ) : null;
 
 export default function Editorial({ onOpen }) {
-  const money = useMoney();
+  const eyebrow = useEyebrow('#journal');
   const { data: store } = useStore();
+  const copy = store?.home?.journal;
   const handle = store?.editorialCollectionHandle;
   const { data } = useProductList(
     { collection: handle ?? undefined, sort: 'featured', limit: 3 },
     { enabled: !!handle },
   );
   const [hero, a, b] = handle ? data?.items ?? [] : [];
+
+  /* The plates under the look book are uncovered by the scroll itself: the
+     photograph is drawn down as the plate rises into place, so coming off
+     the look book and onto them is one movement instead of a block landing
+     on the page. Each plate is told how far it has travelled and the
+     stylesheet does the rest — written straight to a CSS variable, the way
+     the hero rides the lift, so scrolling never re-renders React.
+
+     It opens once. `--u` is allowed to rise and never to fall, so scrolling
+     back up leaves the plates uncovered instead of drawing the curtain
+     again; when both are fully open the handler takes itself off. */
+  const more = useRef(null);
+  useEffect(() => {
+    const els = [...(more.current?.children ?? [])];
+    if (!els.length || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0;
+    let done = false;
+    const update = () => {
+      raf = 0;
+      const h = window.innerHeight;
+      let all = true;
+      for (const el of els) {
+        const was = Number(el.dataset.u || 0);
+        if (was >= 1) continue;
+        // 0 as the plate clears the bottom edge, 1 by the time it is a third of the way up
+        const u = (h - 140 - el.getBoundingClientRect().top) / (h * 0.62);
+        const now = Math.min(1, Math.max(0, u));
+        if (now > was) {
+          el.dataset.u = String(now);
+          el.style.setProperty('--u', now.toFixed(4));
+        }
+        // the handler is here, so the stylesheet may take the reveal over
+        el.dataset.unveil = '';
+        if (Number(el.dataset.u || 0) < 1) all = false;
+      }
+      if (all && !done) { done = true; stop(); }
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    const stop = () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(raf);
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return stop;
+  }, [a?.id, b?.id]);
 
   // the section is built around a piece; without one it waits rather than showing a hole
   if (!hero) return null;
@@ -48,32 +100,28 @@ export default function Editorial({ onOpen }) {
         </Reveal>
 
         <div className="edito-txt">
-          <Reveal><div className="label muted">{eyebrow('#journal')}</div></Reveal>
+          <Reveal><div className="label muted">{eyebrow}</div></Reveal>
           <Reveal delay={90}>
-            <h2 className="display d-md">
-              Limited quantities.<br />
-              <i className="italic">Made in Lebanon.</i>
-            </h2>
+            <h2 className="display d-md">{copy ? emphasis(copy.heading) : '\u00a0'}</h2>
           </Reveal>
           <Reveal delay={160}>
-            <p className="lede">
-              Pieces for women who dress with confidence, attitude and instinct — who value
-              exclusivity, comfort and craftsmanship, and clothes that feel alive. FDM is not only
-              about what you wear, but the mood you step into.
-            </p>
+            <p className="lede">{copy?.intro}</p>
           </Reveal>
           <Reveal delay={230}>
             <div className="label muted">
-              {hero.title} — {money(hero.price)}{hero.productType ? ` · ${hero.productType}` : ''}
+              {hero.title}{hero.productType ? ` · ${hero.productType}` : ''}
             </div>
           </Reveal>
           <Reveal delay={280}>
-            <a className="btn" href="#popups" data-cursor="Visit">Where to find us</a>
+            <div className="edito-acts">
+              <a className="btn" href="#popups" data-cursor="Visit">{copy?.buttonLabel || 'Where to find us'}</a>
+              {copy?.notebook && <Notebook file={copy.notebook} />}
+            </div>
           </Reveal>
         </div>
       </div>
 
-      <div className="stack" style={{ paddingTop: 'clamp(50px, 8vw, 120px)' }}>
+      <div className="stack edito-more" ref={more}>
         {[a, b].filter(Boolean).map((p, i) => (
           <Reveal
             key={p.id}

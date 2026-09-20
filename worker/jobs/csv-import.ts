@@ -1,7 +1,7 @@
 import { AdminProductInput } from '../../shared/api';
 import { parseMoney } from '../../shared/money';
 import { createDb } from '../db/client';
-import { requireMediaBucket } from '../lib/bindings';
+import { getMediaText } from '../lib/media-store';
 import { csvRecords } from '../lib/csv';
 import { ulid } from '../lib/ids';
 import { errorFields, log } from '../lib/log';
@@ -45,10 +45,10 @@ export async function runCsvImport(env: Env, importId: string): Promise<void> {
   const errors: { row: number; message: string }[] = [];
   const summary = { created: 0, updated: 0, skipped: 0, rows: 0 };
   try {
-    const object = await requireMediaBucket(env).get(job.r2_key);
-    if (!object) throw new Error('The uploaded file is missing');
+    const text = await getMediaText(env, job.r2_key);
+    if (text === null) throw new Error('The uploaded file is missing');
     const settings = await getSettings(createDb(d1));
-    const records = csvRecords(await object.text());
+    const records = csvRecords(text);
     summary.rows = records.length;
 
     const groups = new Map<string, { row: number; r: Record<string, string> }[]>();

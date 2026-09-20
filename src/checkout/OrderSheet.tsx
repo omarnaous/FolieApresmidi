@@ -1,9 +1,8 @@
 /** /orders/:token — the confirmation after checkout, and the page a guest's order email links back to. */
-import { Link } from 'react-router';
 import { formatMoney } from '../../shared/money';
 import { isNotFound, messageFor } from '../lib/errors';
 import { firstName } from '../lib/format';
-import { useOrder, useSession } from '../lib/queries';
+import { useOrder } from '../lib/queries';
 import { useLinger } from '../hooks/useSheet';
 import { Sheet } from '../ui/Sheet';
 import { OrderView } from './OrderView';
@@ -11,7 +10,6 @@ import { OrderView } from './OrderView';
 export default function OrderSheet({ token, onClose }: { token: string | null; onClose: () => void }) {
   const held = useLinger(token);
   const order = useOrder(held);
-  const customer = useSession().data?.customer ?? null;
   const o = order.data;
 
   return (
@@ -28,18 +26,13 @@ export default function OrderSheet({ token, onClose }: { token: string | null; o
               <p className="lede" aria-live="polite">
                 {o.status === 'cancelled'
                   ? 'This order was cancelled. Write to us if that is a surprise.'
-                  : `We have it. Paying by ${o.paymentMethod.name}, ${formatMoney(o.total, o.currency)} — we call to confirm before it ships.`}
+                  : `We have it. Paying by ${o.paymentMethod.name}, ${formatMoney(o.total, o.currency)}.`}
               </p>
             </>
           )}
         >
           <div className="co-actions">
             <button className="btn" onClick={onClose}>Back to the boutique</button>
-            {!customer && (
-              <Link className="label link-u" to={`/account/register?email=${encodeURIComponent(o.email)}`}>
-                Create an account
-              </Link>
-            )}
           </div>
         </OrderView>
       ) : order.isError ? (

@@ -1,0 +1,1 @@
+ALTER TABLE `store_settings` ADD `size_chart_json` text DEFAULT '{}' NOT NULL;

@@ -40,7 +40,7 @@ export function allowedTransitions(order: OrderStateView): OrderStatus[] {
 
 /** Customer-facing wording for the order timeline and emails. */
 export const STATUS_COPY: Record<OrderStatus, string> = {
-  pending: 'Order placed — we will call to confirm',
+  pending: 'Order placed',
   paid: 'Payment received',
   fulfilled: 'Packed and ready to ship',
   shipped: 'On its way',

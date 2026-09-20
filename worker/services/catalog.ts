@@ -2,6 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import type {
   AvailabilityDTO,
   CollectionDTO,
+  LookDTO,
   MediaDTO,
   ProductDTO,
   ProductListDTO,
@@ -10,6 +11,7 @@ import type {
   SearchSuggestDTO,
   VariantDTO,
 } from '../../shared/api';
+import { LOOK_MAX } from '../../shared/api';
 import { schema, type DB } from '../db/client';
 import { chunk, mediaById, toMediaDTO } from './media';
 import { sellable, stockFor } from './inventory';
@@ -378,20 +380,41 @@ export async function listProducts(db: DB, p: ListParams): Promise<ProductListDT
   };
 }
 
-export async function relatedProducts(db: DB, product: ProductDTO, limit = 4): Promise<ProductDTO[]> {
-  const { results } = await db.$client
+/**
+ * Shop the look under a product: the pieces the owner paired with it, in
+ * their order, leaving out any that are not on sale. With none paired, the
+ * store suggests pieces that complete it rather than repeat it — another
+ * category first, then the same collections (the same drop), in stock first.
+ */
+export async function shopTheLook(db: DB, product: ProductDTO, suggestions = 4): Promise<LookDTO> {
+  const d1 = db.$client;
+  const { results: paired } = await d1
+    .prepare(
+      `SELECT p.* FROM product_looks l JOIN products p ON p.id = l.look_product_id
+        WHERE l.product_id = ? AND p.status = 'active'
+        ORDER BY l.position
+        LIMIT ?`,
+    )
+    .bind(product.id, LOOK_MAX)
+    .all<Record<string, unknown>>();
+  if (paired.length) return { items: await productDTOs(db, paired.map(rowFrom)), curated: true };
+
+  const { results } = await d1
     .prepare(
       `SELECT p.* FROM products p
         WHERE p.status = 'active' AND p.id != ?
-        ORDER BY (p.product_type = ?) DESC,
+        ORDER BY (p.product_type != ?) DESC,
                  (p.id IN (SELECT cp2.product_id FROM collection_products cp2
                            WHERE cp2.collection_id IN (SELECT collection_id FROM collection_products WHERE product_id = ?))) DESC,
                  p.position ASC
         LIMIT ?`,
     )
-    .bind(product.id, product.productType, product.id, limit)
+    .bind(product.id, product.productType, product.id, suggestions * 3)
     .all<Record<string, unknown>>();
-  return productDTOs(db, results.map(rowFrom));
+  const candidates = await productDTOs(db, results.map(rowFrom));
+  // a stable sort, so the ranking above holds within each half
+  const items = [...candidates].sort((a, b) => Number(b.available) - Number(a.available)).slice(0, suggestions);
+  return { items, curated: false };
 }
 
 export async function availability(db: DB, product: ProductDTO, lowStockThreshold: number): Promise<AvailabilityDTO> {

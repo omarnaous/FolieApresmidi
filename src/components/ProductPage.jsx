@@ -1,23 +1,26 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { imageSrc } from '../../shared/api';
 import { useCart } from '../store/cart';
+import ShopTheLook from './ShopTheLook';
+import SizeChart, { hasSizeChart } from './SizeChart';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 import { useEscape, useLinger, useSheetFocus } from '../hooks/useSheet';
-import { featuredIn, isColourOption, isPlaceholderOption, resolveVariant, srcSet } from '../lib/catalog';
-import { isNotFound, messageFor } from '../lib/errors';
-import {
-  useAvailability, useMoney, useProduct, useRelated, useSession, useStore, useWishlist, useWishlistToggle,
-} from '../lib/queries';
+import { featuredIn, isColourOption, isPlaceholderOption, isSizeOption, resolveVariant, srcSet } from '../lib/catalog';
+import { isNotFound } from '../lib/errors';
+import { useAvailability, useLook, useMoney, useProduct, useStore } from '../lib/queries';
 
 /** "Size" → "Sizes", for the spec list. */
 const plural = (name) => (/s$/i.test(name) ? name : `${name}s`);
 
+/* A wide screen reads the piece as a pinned stack of plates; a phone swipes
+   a row, and so does anyone who has asked for less motion. */
+const STACKED = '(min-width: 901px) and (prefers-reduced-motion: no-preference)';
+const stacked = () => typeof window !== 'undefined' && window.matchMedia(STACKED).matches;
+
 export default function ProductPage({ handle, onClose, onOpen }) {
   const { add, notify } = useCart();
   const money = useMoney();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { data: store } = useStore();
   // hold the last product while the page slides out
   const cached = useLinger(handle, 620);
@@ -25,20 +28,20 @@ export default function ProductPage({ handle, onClose, onOpen }) {
   const product = useProduct(cached);
   const p = product.data;
   const { data: live } = useAvailability(cached, open);
-  const { data: related } = useRelated(cached);
-  const session = useSession();
-  const customer = session.data?.customer ?? null;
-  const { data: wishlist } = useWishlist({ enabled: !!customer });
-  const toggleSave = useWishlistToggle();
+  const { data: look } = useLook(cached);
 
   // option index → chosen value
   const [picks, setPicks] = useState({});
   const [added, setAdded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [nudge, setNudge] = useState(false);
+  const [chart, setChart] = useState(false);
   const scroller = useRef(null);
   const fields = useRef([]);
   const gallery = useRef(null);
+  const media = useRef(null);
+  const stage = useRef(null);
+  const frame = useRef(0);
   const [shot, setShot] = useState(0);
 
   useEffect(() => {
@@ -49,6 +52,7 @@ export default function ProductPage({ handle, onClose, onOpen }) {
     ));
     setAdded(false);
     setShot(0);
+    setChart(false);
     // a new piece always starts at the top, never mid-way down the last one
     scroller.current?.scrollTo({ top: 0, behavior: 'auto' });
     gallery.current?.scrollTo({ left: 0, behavior: 'auto' });
@@ -78,10 +82,66 @@ export default function ProductPage({ handle, onClose, onOpen }) {
     }
   };
 
+  /* ── The stack, on a wide screen ────────────────────────────
+     The gallery pins to the screen and the scroll deals the next plate up
+     over the last. The column of full-height photos it replaces ran three
+     screens deep and every one of them had to be scrolled past to reach the
+     rest of the page; this is one screen, and each turn of the wheel shows
+     something. All the handler writes is a number per shot — how many steps
+     away it stands — and the stylesheet does the moving, so the browser
+     composites it and nothing is laid out twice. */
+  const measure = () => {
+    const box = media.current;
+    const pin = stage.current;
+    const cells = gallery.current?.children;
+    if (!box || !pin || !cells?.length || !stacked()) return;
+    // how far the pinned plate has ridden up the column it is pinned inside
+    const travel = box.offsetHeight - pin.offsetHeight;
+    const passed = pin.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    const through = travel > 0 ? Math.min(1, Math.max(0, passed / travel)) : 0;
+    const pos = through * (cells.length - 1);
+    box.style.setProperty('--f', through.toFixed(4));
+    box.style.setProperty('--p', pos.toFixed(3));
+    for (let i = 0; i < cells.length; i += 1) cells[i].style.setProperty('--t', (i - pos).toFixed(3));
+    const at = Math.round(pos);
+    setShot((n) => (n === at ? n : at));
+  };
+
+  const onSheetScroll = () => {
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      measure();
+    });
+  };
+
+  // before the paint, so a piece is never shown mid-deal for a frame
+  useLayoutEffect(() => {
+    measure();
+    const again = () => measure();
+    window.addEventListener('resize', again);
+    return () => {
+      window.removeEventListener('resize', again);
+      if (frame.current) cancelAnimationFrame(frame.current);
+    };
+  }, [p?.id, open]);
+
   const goToShot = (i) => {
     const el = gallery.current;
     if (!el) return;
-    el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+    if (!stacked()) {
+      el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+      return;
+    }
+    const box = media.current;
+    const pin = stage.current;
+    const sheetEl = scroller.current;
+    if (!box || !pin || !sheetEl) return;
+    const travel = box.offsetHeight - pin.offsetHeight;
+    if (travel <= 0) return;
+    const passed = pin.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    const want = travel * (i / Math.max(1, el.children.length - 1));
+    sheetEl.scrollTo({ top: sheetEl.scrollTop + (want - passed), behavior: 'smooth' });
   };
 
   useEscape(open, onClose);
@@ -113,7 +173,6 @@ export default function ProductPage({ handle, onClose, onOpen }) {
       <button className="pdp-back label" onClick={onClose}>
         <span aria-hidden="true">←</span> Boutique
       </button>
-      <span className="pdp-mark">FDM</span>
       <button className="pdp-x label" onClick={onClose} aria-label="Close">Close</button>
     </header>
   );
@@ -122,11 +181,11 @@ export default function ProductPage({ handle, onClose, onOpen }) {
     <div
       className={`pdp ${open ? 'on' : ''}`}
       role="dialog"
-      aria-modal="true"
       aria-label={label}
       aria-hidden={!open}
       tabIndex={-1}
       ref={scroller}
+      onScroll={onSheetScroll}
       data-lenis-prevent
     >
       {bar}
@@ -167,6 +226,8 @@ export default function ProductPage({ handle, onClose, onOpen }) {
   }
 
   const drop = featuredIn(p, store);
+  // what the piece is: its type, or else the first collection it belongs to
+  const category = p.productType || p.collections.find((cl) => cl.handle !== drop?.handle)?.title || '';
   const choices = p.options.map((o, index) => ({ ...o, index })).filter((o) => !isPlaceholderOption(o));
   const missing = choices.find((o) => !picks[o.index]);
   const soldOut = variant ? !inStock(variant) : !p.available && !missing;
@@ -175,8 +236,6 @@ export default function ProductPage({ handle, onClose, onOpen }) {
   const was = variant ? variant.compareAtPrice : p.compareAtPrice;
   const level = variant ? stock.get(variant.id) : null;
   const low = level?.lowStock && level.quantity !== null ? `Only ${level.quantity} left` : null;
-  const saved = !!wishlist?.items.some((x) => x.id === p.id);
-  const more = (related?.items ?? []).filter((m) => m.id !== p.id).slice(0, 4);
 
   /** Can this value still be bought, given what else is already picked? */
   const can = (index, value) =>
@@ -213,16 +272,6 @@ export default function ProductPage({ handle, onClose, onOpen }) {
     if (ok) setAdded(true);
   };
 
-  const save = () => {
-    if (session.isPending) return;
-    if (!customer) {
-      // sign-in takes this entry's place and hands straight back to it
-      navigate(`/account/login?next=${encodeURIComponent(location.pathname)}`, { replace: true, state: location.state });
-      return;
-    }
-    toggleSave.mutate({ product: p, saved }, { onError: (err) => notify(messageFor(err)) });
-  };
-
   const priceLine = (
     <>
       {money(price)}
@@ -233,24 +282,51 @@ export default function ProductPage({ handle, onClose, onOpen }) {
   return sheet(
     <>
       <div className="pdp-body">
-        {/* One markup for both: a stacked column on a wide screen, a
-            swipeable snapping row on a phone. */}
-        <div className="pdp-media">
-          <div className="pdp-gallery" ref={gallery} onScroll={onGalleryScroll}>
-            {p.images.map((m, i) => (
-              <figure className="pdp-shot plate packshot" key={m.id}>
-                <img
-                  src={imageSrc(m, 1400)}
-                  srcSet={srcSet(m, [640, 960, 1400, 2000])}
-                  sizes="(max-width: 900px) 100vw, 62vw"
-                  alt={m.alt || `${p.title}${i ? ` — view ${i + 1}` : ''}`}
-                  loading={i === 0 ? 'eager' : 'lazy'}
-                />
-                {p.images.length > 1 && (
-                  <figcaption className="pdp-num label">{String(i + 1).padStart(2, '0')}</figcaption>
-                )}
-              </figure>
-            ))}
+        {/* One markup for both: plates dealt by the scroll on a wide screen,
+            a swipeable snapping row on a phone. */}
+        <div className="pdp-media" ref={media} style={{ '--shots': p.images.length }}>
+          <div className="pdp-stage" ref={stage}>
+            <div className="pdp-gallery" ref={gallery} onScroll={onGalleryScroll}>
+              {p.images.map((m, i) => (
+                // --t: the plate starts one step below the one before it
+                <figure className="pdp-shot plate packshot" key={m.id} style={{ '--t': i }}>
+                  <img
+              decoding="async"
+                    src={imageSrc(m, 1400)}
+                    srcSet={srcSet(m, [640, 960, 1400, 2000])}
+                    sizes="(max-width: 900px) 100vw, 62vw"
+                    alt={m.alt || `${p.title}${i ? ` — view ${i + 1}` : ''}`}
+                    loading={i === 0 ? 'eager' : 'lazy'}
+                  />
+                  {p.images.length > 1 && (
+                    <figcaption className="pdp-num label">{String(i + 1).padStart(2, '0')}</figcaption>
+                  )}
+                </figure>
+              ))}
+            </div>
+
+            {p.images.length > 1 && (
+              <>
+                <div className="pdp-rail">
+                  <span className="pdp-rail-track" aria-hidden="true"><i /></span>
+                  <div className="pdp-rail-ns" role="tablist" aria-label="Views">
+                    {p.images.map((m, i) => (
+                      <button
+                        key={m.id}
+                        role="tab"
+                        aria-selected={i === shot}
+                        aria-label={`View ${i + 1}`}
+                        className={`pdp-rail-n label ${i === shot ? 'on' : ''}`}
+                        onClick={() => goToShot(i)}
+                      >
+                        {String(i + 1).padStart(2, '0')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <span className="pdp-cue label" aria-hidden="true">Scroll</span>
+              </>
+            )}
           </div>
 
           {p.images.length > 1 && (
@@ -274,7 +350,7 @@ export default function ProductPage({ handle, onClose, onOpen }) {
         {/* Sticky on a wide screen, so the buy panel never scrolls away. */}
         <aside className="pdp-buy">
           <div className="pdp-buy-inner">
-            <div className="label muted">{[p.productType, drop?.title].filter(Boolean).join(' · ')}</div>
+            <div className="label muted">{[category, drop?.title].filter(Boolean).join(' · ')}</div>
             <h1 className="pdp-name display">{p.title}</h1>
             <div className="pdp-price">{priceLine}</div>
             {low && <span className="label pdp-low" role="status">{low}</span>}
@@ -288,6 +364,8 @@ export default function ProductPage({ handle, onClose, onOpen }) {
 
             {choices.map((o) => {
               const colour = isColourOption(o.name);
+              // the store's chart belongs to the size field, and only if it has numbers in it
+              const showChart = isSizeOption(o.name) && hasSizeChart(store?.sizeChart);
               return (
                 <div
                   key={o.name}
@@ -298,6 +376,17 @@ export default function ProductPage({ handle, onClose, onOpen }) {
                 >
                   <div className="pdp-field-head">
                     <span className="label muted">{o.name}</span>
+                    {showChart && (
+                      <button
+                        type="button"
+                        className="label link-u pdp-chart-open"
+                        aria-expanded={chart}
+                        aria-controls="pdp-size-chart"
+                        onClick={() => setChart((v) => !v)}
+                      >
+                        {chart ? 'Hide' : store.sizeChart.heading}
+                      </button>
+                    )}
                   </div>
                   <div className={colour ? 'swatches' : 'sizes'}>
                     {o.values.map(({ value, swatch }) => (
@@ -313,6 +402,7 @@ export default function ProductPage({ handle, onClose, onOpen }) {
                       </button>
                     ))}
                   </div>
+                  {showChart && chart && <SizeChart chart={store.sizeChart} id="pdp-size-chart" />}
                 </div>
               );
             })}
@@ -325,12 +415,8 @@ export default function ProductPage({ handle, onClose, onOpen }) {
               {added ? 'Added to your bag ✓' : cta}
             </button>
 
-            <button className="label link-u pdp-save" onClick={save} aria-pressed={saved}>
-              {saved ? 'Saved' : 'Save'}
-            </button>
-
             <dl className="pdp-specs">
-              {p.productType && <div className="spec"><dt>Category</dt><dd>{p.productType}</dd></div>}
+              {category && <div className="spec"><dt>Category</dt><dd>{category}</dd></div>}
               {choices.map((o) => (
                 <div className="spec" key={o.name}>
                   <dt>{plural(o.name)}</dt>
@@ -350,40 +436,15 @@ export default function ProductPage({ handle, onClose, onOpen }) {
         </aside>
       </div>
 
-      {more.length > 0 && (
-        <section className="pdp-more">
-          <div className="pdp-more-head">
-            <span className="label muted">More from the boutique</span>
-          </div>
-          <div className="pdp-more-grid">
-            {more.map((m) => (
-              <button className="pdp-rel" key={m.id} onClick={() => onOpen(m)}>
-                <span className="plate packshot pdp-rel-plate">
-                  {m.images[0] && (
-                    <img
-                      src={imageSrc(m.images[0], 640)}
-                      srcSet={srcSet(m.images[0])}
-                      sizes="(max-width: 900px) 50vw, 25vw"
-                      alt={m.images[0].alt || m.title}
-                      loading="lazy"
-                    />
-                  )}
-                </span>
-                <span className="pdp-rel-meta">
-                  <span className="pdp-rel-name">{m.title}</span>
-                  <span className="card-price">{money(m.price)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+      {look?.items.length > 0 && (
+        <ShopTheLook key={p.id} product={p} items={look.items} curated={look.curated} onOpen={onOpen} />
       )}
 
       {/* Phone only: the price and the button stay in reach at any scroll depth. */}
       <div className="pdp-dock">
         <div className="pdp-dock-price">
           <span className="label muted">
-            {choices.map((o) => picks[o.index]).filter(Boolean).join(' · ') || p.productType}
+            {choices.map((o) => picks[o.index]).filter(Boolean).join(' · ') || category}
           </span>
           <span className="card-price">{priceLine}</span>
         </div>

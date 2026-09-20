@@ -146,7 +146,8 @@ export function DataTable<T>({ columns, rows, rowKey, caption, rowHref, selectio
 
 export const Thumb = ({ src, alt = '', size = 40 }: { src: string | null | undefined; alt?: string; size?: number }) =>
   src ? (
-    <img className="adm-thumb" src={src} alt={alt} width={size} height={size} loading="lazy" style={{ width: size, height: size }} />
+    <img
+              decoding="async" className="adm-thumb" src={src} alt={alt} width={size} height={size} loading="lazy" style={{ width: size, height: size }} />
   ) : (
     <span className="adm-thumb adm-thumb--empty" style={{ width: size, height: size }} aria-hidden="true" />
   );
