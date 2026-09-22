@@ -46,8 +46,16 @@ export const qk = {
 };
 
 /** The home grid's request. The preloader asks for the same one, so it warms the grid rather than racing it. */
-export const homeGridQuery = (collection: string | null | undefined): ProductQuery => ({
+/**
+ * A shelf on the home page: ten pieces, and which side of the house they
+ * are from. `accessory` is left out for a shelf that wants both.
+ */
+export const homeGridQuery = (
+  collection: string | null | undefined,
+  accessory?: boolean,
+): ProductQuery => ({
   collection: collection ?? undefined,
+  ...(accessory === undefined ? {} : { accessory: accessory ? '1' : '0' }),
   limit: 10,
 });
 

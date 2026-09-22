@@ -27,10 +27,10 @@ const Arrow = ({ flip }) => (
  *   phase   idle → leaving → waiting → idle
  *   shown   what is on the rail, which lags `collection` by one leave
  */
-export default function Shelf({ id, collection, label, onOpen, onAll, allNoun = 'pieces' }) {
+export default function Shelf({ id, collection, accessory, label, onOpen, onAll, allNoun = 'pieces' }) {
   const { data: store } = useStore();
-  const { data, isError, isPlaceholderData, refetch } = useProductList(homeGridQuery(collection));
-  const key = collection ?? 'all';
+  const { data, isError, isPlaceholderData, refetch } = useProductList(homeGridQuery(collection, accessory));
+  const key = `${collection ?? 'all'}:${accessory ?? 'both'}`;
 
   const [shown, setShown] = useState(null);
   const [phase, setPhase] = useState('idle');
@@ -193,7 +193,7 @@ export default function Shelf({ id, collection, label, onOpen, onAll, allNoun = 
               }}
             />
           </div>
-          <button className="btn solid shelf-all" onClick={() => onAll(shown?.key === 'all' ? null : shown?.key)} data-cursor="All">
+          <button className="btn shelf-all" onClick={() => onAll(shown?.key === 'all' ? null : shown?.key)} data-cursor="All">
             See all {total} {allNoun} <span aria-hidden="true">→</span>
           </button>
         </div>

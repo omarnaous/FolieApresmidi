@@ -15,3 +15,16 @@ SETUP_TOKEN=
 # Resend API key. Leave empty locally: emails are logged and listed at
 # GET /api/dev/mail instead of being sent.
 RESEND_API_KEY=
+
+# Amazon SES. With both keys set, every email goes through SES and Resend is
+# not consulted; the region defaults to us-east-1. Leave empty locally.
+#   wrangler secret put AWS_ACCESS_KEY_ID --env preview
+#   wrangler secret put AWS_SECRET_ACCESS_KEY --env preview
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=
+
+# Brevo. With a key set, every email goes through Brevo and the others are
+# not consulted. EMAIL_FROM must name a sender verified in Brevo.
+#   wrangler secret put BREVO_API_KEY --env preview
+BREVO_API_KEY=

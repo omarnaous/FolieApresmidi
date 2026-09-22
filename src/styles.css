@@ -42,6 +42,9 @@
   --bone-40: rgba(242, 237, 230, 0.4);
   --bone-14: rgba(242, 237, 230, 0.14);
   --sand: #e3d7c6;
+  /* a card's ground: one step down from the page, so a panel reads as laid
+     on the paper rather than drawn on it */
+  --paper: #ece5da;
   /* the product plate: a lit studio sweep a step down from the bone */
   --stone: #e7e1d8;
   --stone-hi: #f1ece5;
@@ -477,12 +480,6 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   animation: film-in 1.2s var(--ease) both;
 }
 @keyframes film-in { from { opacity: 0; } to { opacity: 1; } }
-.hero-vig {
-  position: absolute; inset: 0; z-index: 4; pointer-events: none;
-  background:
-    radial-gradient(130% 90% at 50% 40%, transparent 42%, rgba(12, 11, 10, 0.55) 100%),
-    linear-gradient(180deg, rgba(12, 11, 10, 0.5) 0%, transparent 22%, transparent 66%, rgba(12, 11, 10, 0.72) 100%);
-}
 .hero-chrome {
   position: absolute; inset: 0; z-index: 6;
   display: flex; flex-direction: column; justify-content: space-between;
@@ -490,164 +487,18 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   pointer-events: none;
 }
 .hero-chrome a, .hero-chrome button { pointer-events: auto; }
-.hero-top { display: flex; justify-content: space-between; gap: 20px; color: var(--bone-70); }
-.hero-bot { display: flex; align-items: flex-end; justify-content: center; }
-
-/* The lift doors. --shut runs 0 (open) → 1 (closed) as the hero scrolls
-   away; each leaf carries half an engraved monogram that is only whole
-   when they meet. */
-.hero { --shut: 0; }
-.hero-doors { position: absolute; inset: 0; z-index: 5; pointer-events: none; overflow: hidden; }
-.hero-door {
-  position: absolute; top: 0; bottom: 0; width: 50%;
-  overflow: hidden;
-  background:
-    repeating-linear-gradient(90deg, rgba(242, 237, 230, 0.022) 0 1px, transparent 1px 3px),
-    linear-gradient(90deg, #0e0d0c, #1c1a17 62%, #11100e);
-  will-change: transform;
-}
-.hero-door.is-left {
-  left: 0;
-  transform: translateX(calc((var(--shut) - 1) * 100%));
-  box-shadow: inset -1px 0 0 var(--bone-14), 18px 0 40px rgba(0, 0, 0, 0.45);
-}
-.hero-door.is-right {
-  right: 0;
-  transform: translateX(calc((1 - var(--shut)) * 100%));
-  background:
-    repeating-linear-gradient(90deg, rgba(242, 237, 230, 0.022) 0 1px, transparent 1px 3px),
-    linear-gradient(270deg, #0e0d0c, #1c1a17 62%, #11100e);
-  box-shadow: inset 1px 0 0 var(--bone-14), -18px 0 40px rgba(0, 0, 0, 0.45);
-}
-.hero-door span {
-  position: absolute; top: 50%;
-  font-family: var(--serif);
-  font-size: clamp(120px, 24vw, 340px);
-  line-height: 1;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-  color: transparent;
-  -webkit-text-stroke: 1px rgba(242, 237, 230, 0.2);
-}
-.hero-door.is-left span { right: 0; transform: translate(50%, -50%); }
-.hero-door.is-right span { left: 0; transform: translate(-50%, -50%); }
-
-/* The call station: a floor indicator over a call button, put up once the
-   film has shown the name. Pressing it lights the button and rides down. */
-.lift {
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
-  visibility: hidden;
-  transition: visibility 0s linear 0.9s;
-}
-.lift.is-on { visibility: visible; transition-delay: 0s; }
-.lift > * {
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.9s var(--ease), transform 1.2s var(--ease);
-}
-.lift.is-on > * { opacity: 1; transform: none; }
-.lift.is-on .lift-cap { transition-delay: 0.16s; }
-
-.lift-plate {
-  display: flex; flex-direction: column; align-items: center; gap: 7px;
-  padding: 8px 6px 6px;
-  border: 1px solid var(--bone-14);
-  border-radius: 999px;
-  background: rgba(12, 11, 10, 0.34);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-.lift-floor {
-  display: flex; align-items: center; gap: 5px;
-  padding-top: 1px;
-  font-family: var(--sans);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  font-variant-numeric: tabular-nums;
-  color: var(--bone);
-}
-.lift-arrow {
-  width: 0; height: 0;
-  border-left: 3.5px solid transparent;
-  border-right: 3.5px solid transparent;
-  border-top: 5px solid var(--chili);
-  animation: lift-blink 1.6s steps(1) infinite;
-}
-@keyframes lift-blink { 50% { opacity: 0.2; } }
-/* an odometer: 01 rolls up to 02 as the doors close */
-.lift-num { display: block; height: 12px; line-height: 12px; overflow: hidden; }
-.lift-num span { display: block; transform: translateY(calc(var(--shut) * -100%)); }
-
-.lift-btn {
-  position: relative;
-  display: grid; place-items: center;
-  width: 42px; height: 42px;
-  border-radius: 50%;
-  color: var(--bone);
-  border: 1px solid var(--bone-40);
-  background: radial-gradient(circle at 35% 30%, rgba(242, 237, 230, 0.16), rgba(242, 237, 230, 0.03) 62%);
-  transition: background 0.5s var(--ease), border-color 0.5s var(--ease), color 0.5s var(--ease), box-shadow 0.5s var(--ease);
-}
-/* a call waiting to be answered */
-.lift-btn::after {
-  content: '';
-  position: absolute; inset: -1px;
-  border-radius: 50%;
-  border: 1px solid var(--terra);
-  opacity: 0;
-  animation: lift-ring 2.4s var(--ease-soft) infinite;
-}
-@keyframes lift-ring {
-  0% { transform: scale(1); opacity: 0.8; }
-  70%, 100% { transform: scale(1.75); opacity: 0; }
-}
-.lift-btn svg { animation: lift-drop 1.8s var(--ease-soft) infinite; }
-@keyframes lift-drop {
-  0% { transform: translateY(-5px); opacity: 0; }
-  30%, 70% { opacity: 1; }
-  100% { transform: translateY(6px); opacity: 0; }
-}
-.lift:hover .lift-btn { border-color: var(--terra); color: var(--sand); }
-.lift.is-called .lift-btn {
-  background: radial-gradient(circle at 35% 30%, #e38159, var(--terra) 64%);
-  border-color: var(--terra);
-  color: var(--ink);
-  box-shadow: 0 0 20px rgba(196, 82, 44, 0.6), 0 0 2px rgba(196, 82, 44, 0.9);
-}
-.lift.is-called .lift-btn::after { animation: none; }
-.lift-cap { color: var(--bone-70); transition: color 0.4s var(--ease); }
-.lift:hover .lift-cap { color: var(--bone); }
-.lift:focus-visible { outline: none; }
-.lift:focus-visible .lift-plate { outline: 1px solid var(--bone-70); outline-offset: 3px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .lift-arrow, .lift-btn::after, .lift-btn svg { animation: none; }
+/* Nothing is laid over the film any more, so the two labels carry their own
+   legibility — a breath of ink under the letters, invisible as an effect. */
+.hero-top {
+  display: flex; justify-content: space-between; gap: 20px;
+  color: var(--bone-70);
+  text-shadow: 0 1px 12px rgba(12, 11, 10, 0.75);
 }
 
 @media (max-width: 700px) {
   .hero-top { flex-direction: column; gap: 6px; }
   .hero-top .hide-s { display: none; }
 }
-
-/* ══ MARQUEE ═════════════════════════════════════════════ */
-
-.marquee {
-  background: var(--ink);
-  color: var(--bone);
-  padding-block: 16px;
-  overflow: hidden;
-  white-space: nowrap;
-  border-block: 1px solid var(--ink);
-}
-.marquee-track { display: inline-flex; gap: 0; animation: slide 34s linear infinite; }
-.marquee:hover .marquee-track { animation-play-state: paused; }
-.marquee span {
-  display: inline-flex; align-items: center; gap: 26px;
-  padding-inline: 13px;
-  font-family: var(--serif); font-size: clamp(17px, 2vw, 27px); letter-spacing: 0.01em;
-}
-.marquee em { color: var(--chili); font-style: normal; }
-@keyframes slide { to { transform: translateX(-50%); } }
 
 /* ══ INTRO / MANIFESTO ═══════════════════════════════════ */
 
@@ -1879,6 +1730,8 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 
 .co {
   position: fixed; inset: var(--nav-h) 0 0 0; z-index: 136;
+  /* set by the checkout, which carries no site bar above it */
+  --co-top: var(--nav-h);
   background: var(--bone);
   color: var(--ink);
   overflow-y: auto;
@@ -1899,6 +1752,8 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
     visibility 0s linear 0s;
 }
 
+.co--full { inset: 0; }
+
 .co-bar {
   position: sticky; top: 0; z-index: 12;
   display: flex; align-items: center; justify-content: space-between;
@@ -1912,16 +1767,54 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .co-back, .co-x { color: var(--ink-45); transition: color 0.35s var(--ease); }
 .co-back:hover, .co-x:hover { color: var(--ink); }
 
+/* Two fields of colour, not a card adrift in a column.
+   The bag sits on paper that runs the full height of the window, so the
+   page reads as two halves however short the order is — a summary of one
+   piece no longer leaves a screenful of nothing under it. The form keeps a
+   readable measure and sits against the panel rather than stretching. */
 .co-body {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
-  gap: clamp(24px, 4vw, 70px);
-  padding: clamp(26px, 4vw, 54px) var(--pad) clamp(70px, 9vw, 130px);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 38%);
+  min-height: calc(100% - var(--sub-h));
+  align-items: stretch;
+}
+.co-form {
+  min-width: 0;
+  width: 100%;
+  max-width: 640px;
+  justify-self: end;
+  padding: clamp(26px, 3.6vw, 52px) clamp(24px, 3.2vw, 54px) clamp(60px, 8vw, 110px) var(--pad);
 }
 
 .co-head { margin-bottom: clamp(20px, 2.6vw, 34px); display: flex; flex-direction: column; gap: 12px; }
-.co-form { min-width: 0; }
+/* Where you are, in the house's own numbering. The step you are on is in
+   ink under a rule; the ones behind you keep their number and go quiet; the
+   ones ahead are there so you know how much is left. */
+.co-rail {
+  list-style: none;
+  margin: 0 0 clamp(26px, 3.4vw, 42px);
+  padding: 0 0 14px;
+  display: flex;
+  gap: clamp(18px, 3vw, 40px);
+  border-bottom: 1px solid var(--ink-07);
+}
+.co-rail-step {
+  display: flex; align-items: baseline; gap: 8px;
+  padding-bottom: 14px;
+  margin-bottom: -15px;
+  border-bottom: 1px solid transparent;
+  color: var(--ash);
+  transition: color 0.4s var(--ease), border-color 0.4s var(--ease);
+}
+.co-rail-step.on { color: var(--ink); border-bottom-color: var(--ink); }
+.co-rail-step.done { color: var(--ink-45); }
+.co-rail-n {
+  font-family: var(--sans);
+  font-size: 10px; letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+.co-rail-step.on .co-rail-n { color: var(--terra); }
+.co-rail-name { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; }
 
 .co-fields {
   display: grid;
@@ -1990,21 +1883,91 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .co-opt-name { font-family: var(--serif); font-size: 19px; line-height: 1.1; }
 .co-pay.bad .co-opt { border-color: var(--chili); }
 
-.co-summary { position: sticky; top: calc(var(--sub-h) + 22px); min-width: 0; }
-.co-summary-in {
-  display: flex; flex-direction: column; gap: 16px;
-  padding: clamp(20px, 2.4vw, 30px);
-  border: 1px solid var(--ink-14);
+.co-summary {
+  min-width: 0;
+  background: var(--paper);
+  border-left: 1px solid var(--ink-07);
+  padding: clamp(26px, 3.6vw, 52px) var(--pad) clamp(60px, 8vw, 110px) clamp(24px, 3.2vw, 54px);
 }
-.co-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.co-line { display: grid; grid-template-columns: 54px 1fr auto; gap: 13px; align-items: center; }
-.co-thumb { display: block; aspect-ratio: 4/5; }
+/* there is room for the whole panel beside the form; nothing to fold */
+.co-summary-toggle { display: none; }
+/* The panel is the ground, so the summary inside it carries no box of its
+   own — only its parts, ruled off from one another, following the form
+   down the page. */
+.co-summary-in {
+  position: sticky;
+  top: calc(var(--sub-h) + 26px);
+  display: flex; flex-direction: column;
+  max-width: 400px;
+}
+.co-summary-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding-bottom: 16px;
+}
+.co-summary-part {
+  display: flex; flex-direction: column; gap: 14px;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--ink-14);
+}
+/* The code field is underlined, being a field. A rule of its own beneath it
+   made two lines a few pixels apart; the underline does the separating. */
+.co-summary-part + .co-summary-part {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 0;
+}
+/* ── the bag, as a receipt ──
+   A square of the piece, what it is, what it costs. The count rides the
+   corner of the picture the way it does on every checkout worth copying,
+   instead of taking a line of its own. */
+.co-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.co-line {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding-block: 13px;
+}
+.co-line + .co-line { border-top: 1px solid var(--ink-07); }
+.co-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  background: var(--stone);
+  overflow: hidden;
+}
 .co-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.co-line-mid { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.co-line-name { font-family: var(--serif); font-size: 16px; line-height: 1.15; }
-.co-line-price { font-size: 15px; }
-.co-total { padding-top: 14px; border-top: 1px solid var(--ink-14); }
+.co-thumb-n {
+  position: absolute; top: -6px; right: -6px;
+  display: grid; place-items: center;
+  min-width: 18px; height: 18px;
+  padding-inline: 5px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--sans);
+  font-size: 10px; font-style: normal; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.co-line-mid { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.co-line-name {
+  font-family: var(--sans);
+  font-size: 13.5px; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.co-line-opt { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ash); }
+.co-line-price { font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.co-total {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  padding-top: 16px;
+  margin-top: 2px;
+  border-top: 1px solid var(--ink-14);
+}
+.co-total b { font-family: var(--didone); font-size: clamp(26px, 2.4vw, 34px); line-height: 1; font-weight: 400; }
+/* the note that closes the card, given room to sit apart from the total */
 .co-ship { line-height: 1.9; }
+.co-summary-in > .co-ship { margin-top: 16px; }
 
 .co-done {
   display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
@@ -2013,15 +1976,83 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 }
 .co-done-send { align-self: flex-start; }
 
-@media (max-width: 900px) {
+/* A form column narrower than this cannot hold two fields side by side,
+   even though the page still has room for its two halves. */
+@media (max-width: 1040px) {
+  .co-fields { grid-template-columns: 1fr; }
+  .co-body { grid-template-columns: minmax(0, 1fr) minmax(280px, 34%); }
+  .co-form { padding-right: clamp(18px, 2.4vw, 34px); }
+}
+
+/* Below this there is no room for two halves: the bag folds to a line and
+   the form has the screen to itself. */
+@media (max-width: 760px) {
   .co-body {
     grid-template-columns: 1fr;
-    gap: clamp(26px, 5vw, 38px);
-    padding-bottom: clamp(50px, 9vw, 90px);
+    min-height: 0;
   }
-  /* the summary reads first on a phone: what you are paying for, then where */
-  .co-summary { position: static; order: -1; }
-  .co-fields { grid-template-columns: 1fr; }
+  .co-form {
+    max-width: none;
+    justify-self: stretch;
+    padding: clamp(20px, 5vw, 30px) var(--pad) clamp(50px, 9vw, 90px);
+  }
+
+  /* The summary reads first on a phone, but folded to a single line: what it
+     costs, and a word to open it. A screenful of card before the first field
+     is a screenful to scroll past on every visit.
+
+     The panel's ground and padding move on to the two pieces themselves, so
+     each runs the width of the screen and keeps its own margins — no bleeding
+     a child out of a padded parent, which is how the type ended up against
+     the glass. */
+  .co-summary {
+    order: -1;
+    background: none;
+    border-left: 0;
+    padding: 0;
+  }
+  .co-summary-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    padding: 15px var(--pad);
+    background: var(--paper);
+    border-block: 1px solid var(--ink-07);
+    color: var(--ink);
+    text-align: left;
+  }
+  .co-summary-total { font-family: var(--didone); font-size: 20px; line-height: 1; }
+  .co-summary-caret {
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-left: 9px;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 0.35s var(--ease);
+  }
+  .co-summary.is-open .co-summary-caret { transform: translateY(1px) rotate(225deg); }
+
+  .co-summary-in { display: none; }
+  .co-summary.is-open .co-summary-in {
+    display: flex;
+    position: static;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 2px var(--pad) 20px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--ink-07);
+  }
+}
+
+/* Three steps have to fit across a phone without the last one falling off
+   the edge, so the rail gives up its letter-spacing before its words. */
+@media (max-width: 560px) {
+  .co-rail { gap: 14px; }
+  .co-rail-step { gap: 6px; }
+  .co-rail-name { font-size: 10px; letter-spacing: 0.1em; }
+  .co-rail-n { font-size: 9px; letter-spacing: 0.06em; }
 }
 
 /* ── Commerce additions (routing, checkout steps) ── */
@@ -2105,6 +2136,10 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   border-top: 1px solid var(--ink-14);
 }
 .co-step-title { margin-bottom: clamp(16px, 2vw, 24px); }
+/* A step still ahead: its name, so the shape of the checkout is known from
+   the first screen, and nothing to fill in until it is reached. */
+.co-step.is-ahead { color: var(--ink-45); }
+.co-step.is-ahead .co-step-title { margin-bottom: 0; }
 .co-step .co-pay { margin-top: 0; }
 .co-step-done { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .co-step-done-txt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -2407,7 +2442,18 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   background: var(--terra);
   transition: left 0.2s linear, width 0.4s var(--ease);
 }
-.shelf-all { white-space: nowrap; }
+/* "See all 54 pieces" is a way through, not an action to be taken — so it
+   is not the terracotta the bag and the checkout wear. Squared off, in the
+   paper the page is printed on, with a hairline to hold its edge; the ink
+   still fills it on hover, as every button here does. */
+.shelf-all {
+  white-space: nowrap;
+  border-radius: 0;
+  background: var(--bone);
+  border-color: var(--ink-14);
+  color: var(--ink);
+}
+.shelf-all:hover { border-color: var(--ink); }
 
 @media (max-width: 760px) {
   .shelf-foot { grid-template-columns: auto 1fr; }
@@ -2504,8 +2550,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   .pdp-dock,
   .scrim,
   .floors-index,
-  .floors-dial,
-  .lift-plate {
+  .floors-dial {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -2517,7 +2562,6 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   .pdp-bar, .co-bar, .pdp-dock { background: rgba(242, 237, 230, 0.98); }
   .floors-index { background: rgba(242, 237, 230, 0.97); }
   .floors-dial { background: rgba(12, 11, 10, 0.72); }
-  .lift-plate { background: rgba(12, 11, 10, 0.5); }
   .scrim { background: rgba(12, 11, 10, 0.58); }
 }
 

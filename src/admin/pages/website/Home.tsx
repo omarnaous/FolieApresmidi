@@ -4,7 +4,6 @@ import {
   HomeInput,
   MAX_FLOORS,
   MAX_POPUPS,
-  MAX_RIBBON,
   put,
   type AdminHomeDTO,
   type HomeSectionKey,
@@ -18,7 +17,7 @@ import { clientKey, moveItem, sameJson } from '../../lib/util';
 import { Button, IconButton } from '../../ui/Button';
 import { CollectionSelect } from '../../ui/CollectionSelect';
 import { ErrorBanner, FormErrorSummary, QueryState } from '../../ui/feedback';
-import { Select, TagInput, Textarea, TextInput, Toggle } from '../../ui/form';
+import { Select, Textarea, TextInput, Toggle } from '../../ui/form';
 import { IconArrowDown, IconArrowUp, IconPlus, IconTrash } from '../../ui/icons';
 import { Card, PageHeader, SaveBar } from '../../ui/layout';
 import { SingleImageField } from '../../ui/media';
@@ -264,19 +263,8 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
             kind="video"
             value={draft.video}
             error={errors['hero.videoMediaId']}
-            hint="An MP4, up to 80 MB. It plays silently behind the monogram and rests on its last frame. With nothing uploaded, the house's own campaign film plays."
+            hint="An MP4, up to 80 MB. It plays silently, full screen, on a loop. With nothing uploaded, the house's own campaign film plays."
             onChange={(video) => set('video', video)}
-          />
-        </Card>
-
-        <Card title="The ribbon">
-          <TagInput
-            label="Words"
-            value={draft.ribbon}
-            max={MAX_RIBBON}
-            error={errors.ribbon}
-            hint="The words that run under the film, separated by ✦. They repeat, so a handful is enough."
-            onChange={(ribbon) => set('ribbon', ribbon)}
           />
         </Card>
 

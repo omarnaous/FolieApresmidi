@@ -22,8 +22,12 @@
     "binding": "ASSETS",
     // a single-page app: unknown paths render index.html
     "not_found_handling": "single-page-application",
-    // paths the Worker answers before any static file
+    // paths the Worker answers before any static file. "/" is here because
+    // index.html exists, so without it the front page would be handed over
+    // as a file and never get its canonical, its share picture or the
+    // shop's own structured data.
     "run_worker_first": [
+      "/",
       "/api/*",
       "/media/*",
       "/film/*",
@@ -88,7 +92,10 @@
         "APP_ENV": "staging",
         "APP_URL": "https://fdm-preview.follies.workers.dev",
         "ALLOWED_ORIGINS": "https://fdm-preview.follies.workers.dev",
-        "EMAIL_FROM": "Follies d'Après-Midi <orders@example.com>",
+        // Brevo will only send from an address it has seen verified. This is
+        // the one the account was opened with; change it here when the
+        // house's own domain is verified in Brevo.
+        "EMAIL_FROM": "Follies d'Après-Midi <folliesdapresmidi@gmail.com>",
         // The free plan gives a request 10 ms of CPU, and 100,000 PBKDF2
         // rounds do not fit. Preview only — staging and production hash at
         // full strength.

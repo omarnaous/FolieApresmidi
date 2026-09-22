@@ -229,6 +229,10 @@ export default function ProductPage({ handle, onClose, onOpen }) {
   // what the piece is: its type, or else the first collection it belongs to
   const category = p.productType || p.collections.find((cl) => cl.handle !== drop?.handle)?.title || '';
   const choices = p.options.map((o, index) => ({ ...o, index })).filter((o) => !isPlaceholderOption(o));
+  /* Where a piece has sizes the chart hangs off that field; where it has none
+     there is nothing to hang it on, so it gets a line of its own. Either way
+     every piece in the shop can be measured against the house's chart. */
+  const loneChart = !choices.some((o) => isSizeOption(o.name)) && hasSizeChart(store?.sizeChart);
   const missing = choices.find((o) => !picks[o.index]);
   const soldOut = variant ? !inStock(variant) : !p.available && !missing;
   const ready = !!variant && !soldOut;
@@ -406,6 +410,27 @@ export default function ProductPage({ handle, onClose, onOpen }) {
                 </div>
               );
             })}
+
+            {/* The chart sits with the size buttons where there are any. A piece
+                sold in a single size has none, and the house's measurements are
+                worth reading there too — so it is given a line of its own. */}
+            {loneChart && (
+              <div className="pdp-field">
+                <div className="pdp-field-head">
+                  <span className="label muted">Measurements</span>
+                  <button
+                    type="button"
+                    className="label link-u pdp-chart-open"
+                    aria-expanded={chart}
+                    aria-controls="pdp-size-chart"
+                    onClick={() => setChart((v) => !v)}
+                  >
+                    {chart ? 'Hide' : store.sizeChart.heading}
+                  </button>
+                </div>
+                {chart && <SizeChart chart={store.sizeChart} id="pdp-size-chart" />}
+              </div>
+            )}
 
             <button
               className={`btn solid block pdp-add ${ready ? '' : 'waiting'}`}

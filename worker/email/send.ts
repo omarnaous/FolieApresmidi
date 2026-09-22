@@ -1,5 +1,7 @@
 import { AppError } from '../lib/errors';
 import { errorFields, log } from '../lib/log';
+import { brevoRetryable, brevoSend } from './brevo';
+import { sesFrom, sesRetryable, sesSend } from './ses';
 import type { Email } from './templates';
 
 /** What the provider said, in the words it said it, for a person to read. */
@@ -15,9 +17,12 @@ function refusal(detail: string): string {
 const DEV_MAIL_PREFIX = 'devmail:';
 
 /**
- * Deliver one email. With a RESEND_API_KEY it goes to Resend (idempotent per
- * message key, so a retried queue message cannot send twice); without one —
- * local development — it is logged and kept in KV for GET /api/dev/mail.
+ * Deliver one email.
+ *
+ * Whichever provider the environment has been given, in order: Brevo if
+ * there is a Brevo key, then Amazon SES if there are AWS keys, then Resend,
+ * and otherwise — local development — it is logged and kept in KV for
+ * GET /api/dev/mail.
  * Throws on a retryable failure so the queue retries it.
  *
  * `strict` is for the sends someone is waiting on — the Send a test button.
@@ -25,8 +30,45 @@ const DEV_MAIL_PREFIX = 'devmail:';
  * not accept, an address outside a sandbox) is logged either way, but a
  * queue job carries on while a person is told what was said. Without this
  * the button reported a send that never left the building.
+ *
+ * `attachment` is carried by Brevo, which fetches the file from the URL
+ * given. The other providers ignore it: nothing the shop sends by them has
+ * anything attached.
  */
-export async function sendEmail(env: Env, to: string, email: Email, idempotencyKey: string, opts: { strict?: boolean } = {}): Promise<void> {
+export async function sendEmail(
+  env: Env,
+  to: string,
+  email: Email,
+  idempotencyKey: string,
+  opts: { strict?: boolean; attachment?: { url: string; name: string } | null } = {},
+): Promise<void> {
+  if (env.BREVO_API_KEY) {
+    const r = await brevoSend(env.BREVO_API_KEY, env.EMAIL_FROM, to, email, { tag: 'transactional', attachment: opts.attachment });
+    if (r.ok) return;
+    if (!brevoRetryable(r)) {
+      log.error('email_rejected', { to, provider: 'brevo', status: r.status, code: r.code, detail: r.detail });
+      if (opts.strict) throw new AppError('BAD_REQUEST', `The email service refused it: ${r.detail}`);
+      return;
+    }
+    const err = new Error(`Brevo ${r.status} ${r.code ?? ''}: ${r.detail}`);
+    log.warn('email_retry', { to, provider: 'brevo', status: r.status, ...errorFields(err) });
+    throw err;
+  }
+
+  const ses = sesFrom(env);
+  if (ses) {
+    const r = await sesSend(ses, env.EMAIL_FROM, to, email);
+    if (r.ok) return;
+    if (!sesRetryable(r)) {
+      log.error('email_rejected', { to, provider: 'ses', status: r.status, code: r.code, detail: r.detail });
+      if (opts.strict) throw new AppError('BAD_REQUEST', `The email service refused it: ${r.detail}`);
+      return;
+    }
+    const err = new Error(`SES ${r.status} ${r.code ?? ''}: ${r.detail}`);
+    log.warn('email_retry', { to, provider: 'ses', status: r.status, ...errorFields(err) });
+    throw err;
+  }
+
   if (!env.RESEND_API_KEY) {
     log.info('email_dev', { to, subject: email.subject });
     await env.KV.put(

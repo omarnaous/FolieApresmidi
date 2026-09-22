@@ -1,6 +1,5 @@
 import React from 'react';
 import { imageSrc } from '../../shared/api';
-import { ACCESSORY_HANDLES } from '../data/accessories';
 import { featuredIn, isColourOption, srcSet } from '../lib/catalog';
 import { useMoney, useStore } from '../lib/queries';
 
@@ -31,7 +30,7 @@ export default function PieceCard({ product: p, index, total, onOpen, showDrop, 
   const colour = p.options.find((o) => isColourOption(o.name));
   const colours = colour && colour.values.length > 1 ? colour.values : [];
   // the jewellery is shot on grey, not white
-  const grey = p.collections.some((c) => ACCESSORY_HANDLES.has(c.handle));
+  const grey = p.isAccessory;
   const sizes = rail ? SIZES.rail : SIZES.grid;
 
   const open = () => onOpen(p);

@@ -2,13 +2,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router';
 import PieceCard, { PieceSkeletons } from './PieceCard';
 import ShelfTabs from './ShelfTabs';
-import { featuredIn, isColourOption } from '../lib/catalog';
+import { isColourOption } from '../lib/catalog';
 import { useCollection, useMoney, useProducts, useStore, useSuggest } from '../lib/queries';
 import { parseCatalogue } from '../lib/routes';
 import { useEscape, useLinger } from '../hooks/useSheet';
 
 const SORTS = [
-  { key: 'featured', label: 'Featured' },
+  /* The house's own order — the one the admin's product list is dragged
+     into, and a collection's own running order when one is being looked at.
+     Nothing here is "featured": every piece is shown, in the order set. */
+  { key: 'featured', label: 'Our order' },
   { key: 'price_asc', label: 'Price ↑' },
   { key: 'price_desc', label: 'Price ↓' },
   { key: 'title_asc', label: 'A–Z' },
@@ -109,11 +112,6 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   const total = first?.total ?? 0;
   const price = first?.facets.price;
 
-  // a badge on every card marks nothing — see ProductCard
-  const mixed = useMemo(
-    () => results.some((p) => featuredIn(p, store)) && results.some((p) => !featuredIn(p, store)),
-    [results, store],
-  );
 
   /* Facets as the server counts them, plus whatever is already chosen — a
      pick that narrowed its own facet away must still be there to undo. */
@@ -294,7 +292,7 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
                   blank until it was scrolled to. */}
               {results.map((p, i) => (
                 <div className="cat-in" key={p.id} style={{ '--n': i % 8 }}>
-                  <PieceCard product={p} index={i} onOpen={onOpen} showDrop={mixed} price />
+                  <PieceCard product={p} index={i} onOpen={onOpen} showDrop={false} price />
                 </div>
               ))}
             </div>

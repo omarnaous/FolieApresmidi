@@ -132,6 +132,9 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
   const [bootError, setBootError] = useState('');
   const [co, setCo] = useState<CheckoutDTO | null>(null);
   const [step, setStep] = useState<Step>('contact');
+  /* Folded on a phone, always open on a desktop — the stylesheet decides
+     which, this only remembers whether it has been asked to open. */
+  const [sumOpen, setSumOpen] = useState(false);
   const [contact, setContact] = useState<Contact>({ email: '', phone: '', acceptsMarketing: false });
   const [address, setAddress] = useState<AddressValues>(() => addressValues(null, store ? defaultCountry(store) : ''));
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -408,9 +411,22 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
     ...stock.filter((s) => !co.problems.some((p) => p.variantId === s.key)),
   ];
 
+  const STEP_NAMES: Record<Step, string> = { contact: 'Details', delivery: 'Delivery', payment: 'Payment' };
+
   return (
     <div className="co-body">
       <div className="co-form">
+        {/* Where you are, and how much is left. A checkout that does not say
+            is a checkout people leave. */}
+        <ol className="co-rail" aria-label="Checkout steps">
+          {steps.map((s, i) => (
+            <li key={s} className={`co-rail-step${i === at ? ' on' : ''}${i < at ? ' done' : ''}`} aria-current={i === at ? 'step' : undefined}>
+              <span className="co-rail-n">{String(i + 1).padStart(2, '0')}</span>
+              <span className="co-rail-name">{STEP_NAMES[s]}</span>
+            </li>
+          ))}
+        </ol>
+
         <div aria-live="polite">
           {notice && <p className="co-alert">{notice}</p>}
         </div>
@@ -492,9 +508,11 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
           )}
         </section>
 
-        {co.requiresShipping && at >= 1 && (
-          <section className="co-step" aria-labelledby="co-step-delivery">
-            {step === 'delivery' ? (
+        {co.requiresShipping && (
+          <section className={`co-step${at < 1 ? ' is-ahead' : ''}`} aria-labelledby="co-step-delivery">
+            {at < 1 ? (
+              <h2 className="display d-sm co-step-title" id="co-step-delivery">Delivery</h2>
+            ) : step === 'delivery' ? (
               <>
                 <h2 className="display d-sm co-step-title" id="co-step-delivery">Delivery</h2>
                 {co.shippingRates.length === 0 ? (
@@ -548,9 +566,13 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
           </section>
         )}
 
-        {at === steps.length - 1 && (
-          <section className="co-step" aria-labelledby="co-step-payment">
-            <h2 className="display d-sm co-step-title" id="co-step-payment">Payment</h2>
+        {/* All three stand on the page from the first moment, one under the
+            other, so what the checkout asks for is known before it is asked.
+            The ones not yet reached are shut: their name, and nothing to
+            fill in. */}
+        <section className={`co-step${at < steps.length - 1 ? ' is-ahead' : ''}`} aria-labelledby="co-step-payment">
+          <h2 className="display d-sm co-step-title" id="co-step-payment">Payment</h2>
+          {at === steps.length - 1 && (<>
             {co.paymentMethods.length === 0 ? (
               <p className="lede">There is no way to pay online yet. Write to us and we will take the order by hand.</p>
             ) : (
@@ -586,14 +608,33 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
                 {saving === 'place' ? 'Placing…' : `Place the order — ${format(co.pricing.total)}`}
               </button>
             </div>
-          </section>
-        )}
+          </>)}
+        </section>
       </div>
 
-      {/* Sticky beside the form on a wide screen; the order stays in view. */}
-      <aside className="co-summary">
-        <div className="co-summary-in">
-          <div className="label muted">Your bag ({count})</div>
+      {/* Sticky beside the form on a wide screen, where there is room for it.
+          On a phone it is folded to one line — the way every house's checkout
+          does it — so the form starts at the top of the screen instead of
+          behind a screenful of card. */}
+      <aside className={`co-summary${sumOpen ? ' is-open' : ''}`}>
+        <button
+          type="button"
+          className="co-summary-toggle"
+          aria-expanded={sumOpen}
+          aria-controls="co-summary-in"
+          onClick={() => setSumOpen((v) => !v)}
+        >
+          <span className="label">
+            {sumOpen ? 'Hide' : 'Show'} order summary
+            <i className="co-summary-caret" aria-hidden="true" />
+          </span>
+          <span className="co-summary-total">{format(co.pricing.total)}</span>
+        </button>
+        <div className="co-summary-in" id="co-summary-in">
+          <div className="co-summary-head">
+            <span className="label">Your bag</span>
+            <span className="label muted">{count} {count === 1 ? 'piece' : 'pieces'}</span>
+          </div>
           <SummaryLines
             lines={co.lines.map((l) => ({
               key: l.variantId,
@@ -606,6 +647,7 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
             format={format}
           />
 
+          <div className="co-summary-part">
           {co.discountCode ? (
             <div className="bag-code-on">
               <span className="label">Code {co.discountCode}</span>
@@ -631,8 +673,11 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
           {(codeError || co.discountError) && (
             <span className="co-err label" role="alert">{codeError || co.discountError}</span>
           )}
+          </div>
 
-          <PricingRows pricing={co.pricing} format={format} />
+          <div className="co-summary-part">
+            <PricingRows pricing={co.pricing} format={format} />
+          </div>
           <span className="label muted co-ship">Delivery in Lebanon.</span>
         </div>
       </aside>

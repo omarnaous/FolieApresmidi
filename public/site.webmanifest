@@ -1,0 +1,13 @@
+{
+  "name": "Follies d'Après-Midi",
+  "short_name": "FDM",
+  "description": "Luxury prêt-à-porter, designed and produced in limited quantities in Lebanon.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2ede6",
+  "theme_color": "#0c0b0a",
+  "icons": [
+    { "src": "/brand/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

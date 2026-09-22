@@ -10,7 +10,7 @@ import { useCan } from '../../lib/session';
 import { sameJson, slugify } from '../../lib/util';
 import { Button, ButtonLink } from '../../ui/Button';
 import { Banner, ErrorBanner, FormErrorSummary, ProductStatusBadge, QueryState } from '../../ui/feedback';
-import { Select, TextInput } from '../../ui/form';
+import { Select, TextInput, Toggle } from '../../ui/form';
 import { HtmlField } from '../../ui/HtmlField';
 import { IconExternal } from '../../ui/icons';
 import { Card, PageHeader, SaveBar } from '../../ui/layout';
@@ -187,6 +187,15 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
               <p className="adm-field__hint">
                 {draft.status === 'active' ? 'Visible in the store.' : draft.status === 'draft' ? 'Hidden until you set it active.' : 'Hidden and kept for records.'}
               </p>
+            </Card>
+
+            <Card title="Where it belongs">
+              <Toggle
+                label="An accessory"
+                hint="Shown in the accessories section rather than the boutique, and photographed on grey."
+                checked={draft.isAccessory}
+                onChange={(on) => set('isAccessory', on)}
+              />
             </Card>
 
             <CollectionsCard selected={draft.collectionIds} onChange={(ids) => set('collectionIds', ids)} />

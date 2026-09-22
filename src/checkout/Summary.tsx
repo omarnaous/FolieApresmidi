@@ -17,22 +17,32 @@ export interface SummaryLine {
 
 type Format = (amount: number) => string;
 
+/**
+ * The bag, as a receipt rather than a gallery: a small square of the piece
+ * with its count on the corner, the name and what was chosen, and the money
+ * on the right. Every line the same height, ruled off from the next, so ten
+ * pieces read as a list and not as ten posters.
+ */
 export function SummaryLines({ lines, format }: { lines: SummaryLine[]; format: Format }) {
   return (
     <ul className="co-lines">
       {lines.map((l) => (
         <li className="co-line" key={l.key}>
-          <span className="plate packshot co-thumb">
+          <span className="co-thumb">
             {l.image && <img
-              decoding="async" src={imageSrc(l.image, 320)} alt={l.image.alt || l.title} loading="lazy" />}
+              decoding="async" src={imageSrc(l.image, 160)} alt={l.image.alt || l.title} loading="lazy" />}
+            {l.quantity > 1 && <i className="co-thumb-n" aria-hidden="true">{l.quantity}</i>}
           </span>
           <span className="co-line-mid">
             <span className="co-line-name">{l.title}</span>
-            <span className="label muted">
-              {[variantLabel(l.variantTitle), `×${l.quantity}`].filter(Boolean).join(' · ')}
-            </span>
+            {variantLabel(l.variantTitle) && (
+              <span className="co-line-opt">{variantLabel(l.variantTitle)}</span>
+            )}
           </span>
-          <span className="card-price co-line-price">{format(l.total)}</span>
+          <span className="co-line-price">
+            {format(l.total)}
+            {l.quantity > 1 && <span className="sr-only"> for {l.quantity}</span>}
+          </span>
         </li>
       ))}
     </ul>

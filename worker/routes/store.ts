@@ -76,6 +76,8 @@ store.get('/products', query(ProductListQuery), async (c) => {
     min: q.min,
     max: q.max,
     available: q.available === '1' || q.available === 'true',
+    // absent means both: the catalogue lists everything the house sells
+    accessory: q.accessory === undefined ? undefined : q.accessory === '1' || q.accessory === 'true',
     sort: q.sort ?? (q.q ? 'relevance' : 'featured'),
     offset: decodeCursor(q.cursor),
     limit: q.limit,

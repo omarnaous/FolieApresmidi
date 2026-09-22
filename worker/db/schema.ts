@@ -94,6 +94,8 @@ export const products = sqliteTable(
     descriptionText: text('description_text').notNull().default(''),
     status: text('status', { enum: ['draft', 'active', 'archived'] }).notNull().default('draft'),
     productType: text('product_type').notNull().default(''),
+    /** Shown in the accessories section rather than the boutique. */
+    isAccessory: bool('is_accessory').notNull().default(false),
     vendor: text('vendor'),
     seoTitle: text('seo_title'),
     seoDescription: text('seo_description'),

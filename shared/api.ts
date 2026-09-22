@@ -324,6 +324,8 @@ export interface ProductDTO {
   description: string;
   descriptionHtml: string;
   productType: string;
+  /** Belongs in the accessories section, not the boutique. */
+  isAccessory: boolean;
   vendor: string | null;
   tags: string[];
   price: Money;
@@ -356,6 +358,28 @@ export interface CollectionDTO {
 }
 
 /** GET /api/products — query params */
+/** POST /api/admin/newsletter/send — a letter to the list, a batch at a time. */
+export const NewsletterSendInput = z.object({
+  subject: z.string().trim().min(1, 'Required').max(150),
+  body: z.string().trim().min(1, 'Required').max(20_000),
+  /** Where the last batch stopped; absent starts at the beginning. */
+  cursor: z.string().max(200).optional(),
+  /** Send to this address alone, to read it before the list does. */
+  testTo: z.string().trim().email('That does not look like an email').optional(),
+  /** A file to send with it — a look book, a price list. */
+  attachmentMediaId: z.string().max(40).nullish(),
+});
+export type NewsletterSendInput = z.input<typeof NewsletterSendInput>;
+
+export interface NewsletterSendDTO {
+  sent: number;
+  failed: number;
+  /** More to go: send again with this. Null when the list is finished. */
+  nextCursor: string | null;
+  /** How many are on the list altogether, for a progress line. */
+  total: number;
+}
+
 export const ProductListQuery = z.object({
   collection: zHandle.optional(),
   q: z.string().trim().max(120).optional(),
@@ -366,6 +390,8 @@ export const ProductListQuery = z.object({
   min: z.coerce.number().int().min(0).optional(),
   max: z.coerce.number().int().min(0).optional(),
   available: z.enum(['1', 'true', '0', 'false']).optional(),
+  /** '1' for the accessories alone, '0' for everything but them. */
+  accessory: z.enum(['1', 'true', '0', 'false']).optional(),
   sort: z.enum(PRODUCT_SORTS).optional(),
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(48),
@@ -776,6 +802,7 @@ export const AdminProductInput = z
     descriptionHtml: z.string().max(100_000).default(''),
     status: z.enum(PRODUCT_STATUSES).default('draft'),
     productType: z.string().trim().max(80).default(''),
+    isAccessory: z.boolean().default(false),
     vendor: z.string().trim().max(80).nullish().transform((v) => v || null),
     tags: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
     seoTitle: z.string().trim().max(200).nullish().transform((v) => v || null),
@@ -845,6 +872,7 @@ export interface AdminProductDTO {
   descriptionHtml: string;
   status: ProductStatus;
   productType: string;
+  isAccessory: boolean;
   vendor: string | null;
   tags: string[];
   seoTitle: string | null;

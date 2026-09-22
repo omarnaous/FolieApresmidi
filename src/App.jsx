@@ -7,7 +7,6 @@ import Cursor from './components/Cursor';
 import Nav from './components/Nav';
 import MobileMenu from './components/MobileMenu';
 import Hero from './components/Hero';
-import Marquee from './components/Marquee';
 import Maison from './components/Maison';
 import Shop from './components/Shop';
 import Accessories from './components/Accessories';
@@ -167,8 +166,7 @@ export default function App() {
 
       {/* under a page, the home page is out of reach of the keyboard and screen readers */}
       <main inert={!home}>
-        <Hero ready={ready} />
-        <Marquee />
+        <Hero />
         {/* the sections, in the order the admin's website management sets */}
         {sections.map((s) => (
           <React.Fragment key={s.key}>{SECTION_VIEWS[s.key]?.({ openProduct, openCatalogue })}</React.Fragment>

@@ -160,6 +160,34 @@ export function orderEmailTest(store: StoreBrand, adminUrl: string): Email {
   };
 }
 
+/**
+ * A letter to the list. The body is the owner's own words, typed as plain
+ * paragraphs in the admin — never markup they could paste in, so nothing
+ * they write can break the letter or carry a script into an inbox.
+ *
+ * Every copy carries its own way out. A list email without one is how a
+ * house ends up in a spam folder.
+ */
+export function newsletterLetter(
+  store: StoreBrand,
+  subject: string,
+  body: string,
+  unsubscribeUrl: string,
+): Email {
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map((para) => para.trim())
+    .filter(Boolean)
+    .map((para) => `<p style="margin:0 0 16px">${escapeHtml(para).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  const out = `<p style="margin:34px 0 0;font-size:11px;color:${ASH}">You are on this list because you gave us your address. <a href="${escapeHtml(unsubscribeUrl)}" style="color:${ASH}">Leave it</a> — one click, no questions.</p>`;
+  return {
+    subject,
+    html: layout(store, subject, `${paragraphs}${button(store.url, 'Visit the shop')}${out}`, body.slice(0, 120)),
+    text: `${body}\n\nLeave the list: ${unsubscribeUrl}`,
+  };
+}
+
 export function passwordReset(store: StoreBrand, name: string, url: string): Email {
   const body = `<p>Someone asked to reset the password for this account. If it was you, choose a new one below.</p>${button(url, 'Choose a new password')}<p>${muted('This link expires in one hour and works once. If you did not ask for it, you can ignore this email — your password stays the same.')}</p>`;
   return {

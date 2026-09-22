@@ -39,6 +39,7 @@ export interface ProductDraft {
   descriptionHtml: string;
   status: ProductStatus;
   productType: string;
+  isAccessory: boolean;
   vendor: string;
   tags: string[];
   seoTitle: string;
@@ -82,6 +83,7 @@ export const emptyDraft = (): ProductDraft => ({
   descriptionHtml: '',
   status: 'draft',
   productType: '',
+  isAccessory: false,
   vendor: '',
   tags: [],
   seoTitle: '',
@@ -101,6 +103,7 @@ export function fromDTO(p: AdminProductDTO): ProductDraft {
     descriptionHtml: p.descriptionHtml,
     status: p.status,
     productType: p.productType,
+    isAccessory: p.isAccessory,
     vendor: p.vendor ?? '',
     tags: p.tags,
     seoTitle: p.seoTitle ?? '',
@@ -191,6 +194,7 @@ export function buildPayload(d: ProductDraft): { payload: AdminProductInput; err
     descriptionHtml: d.descriptionHtml,
     status: d.status,
     productType: d.productType,
+    isAccessory: d.isAccessory,
     vendor: d.vendor.trim() || null,
     tags: d.tags,
     seoTitle: d.seoTitle.trim() || null,

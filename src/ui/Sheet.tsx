@@ -13,13 +13,18 @@ interface SheetProps {
   onClose: () => void;
   /** the back link's words, e.g. "Keep shopping" */
   back?: string;
+  /** Swipe down to leave. Off where leaving costs something — a checkout
+      half filled in is not something to lose to a stray gesture. */
+  swipeToClose?: boolean;
+  /** No site bar above it: the sheet takes the whole window. */
+  full?: boolean;
   children?: ReactNode;
 }
 
-export function Sheet({ open, label, onClose, back = 'Boutique', children }: SheetProps) {
+export function Sheet({ open, label, onClose, back = 'Boutique', swipeToClose = true, full = false, children }: SheetProps) {
   const sheet = useRef<HTMLDivElement>(null);
 
-  useSwipeDismiss(sheet, onClose, { enabled: open });
+  useSwipeDismiss(sheet, onClose, { enabled: open && swipeToClose });
   useEscape(open, onClose);
   useSheetFocus(sheet, open);
 
@@ -31,7 +36,7 @@ export function Sheet({ open, label, onClose, back = 'Boutique', children }: She
     // data-lenis-prevent: a stopped Lenis preventDefaults every touchmove,
     // including the ones meant for this scroller.
     <div
-      className={`co ${open ? 'on' : ''}`}
+      className={`co ${full ? 'co--full ' : ''}${open ? 'on' : ''}`}
       role="dialog"
       aria-label={label}
       aria-hidden={!open}

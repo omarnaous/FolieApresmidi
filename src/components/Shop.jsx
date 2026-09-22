@@ -1,16 +1,22 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useEyebrow } from '../data/sections';
 import { emphasis } from '../lib/emphasis';
-import { ACCESSORY_HANDLES } from '../data/accessories';
 import Shelf from './Shelf';
 import ShelfTabs from './ShelfTabs';
 import { homeGridQuery, useCollection, usePrefetchProductList, useStore } from '../lib/queries';
 
 /**
  * The boutique: up to ten ready-to-wear pieces on a shelf under the drop's
- * name, with words for tabs. Accessories have a section of their own, so
- * their collections are kept off these tabs. "See all" goes to the full
- * catalogue for what is showing.
+ * name.
+ *
+ * The shelf is the drop, and the tab over it is the drop's own title —
+ * whichever collection the owner has made the featured one in the admin.
+ * No name is written down here; change the drop there and this follows it.
+ *
+ * The categories are not gone, only not offered here: a shopper looking for
+ * a kind of thing finds Dresses, Tops and the rest inside "See all", which
+ * opens the full catalogue, and the accessories keep a section and tabs of
+ * their own.
  */
 export default function Shop({ onOpen, onAll }) {
   const eyebrow = useEyebrow('#boutique');
@@ -22,13 +28,15 @@ export default function Shop({ onOpen, onAll }) {
   const copy = store?.home?.boutique;
   const heading = copy?.heading || ((store?.featuredCollectionHandle && !featured.isError ? featured.data?.title : store?.name) ?? ' ');
 
+  // the drop names itself: one tab, carrying the featured collection's title
+  const drop = store?.featuredCollectionHandle ?? null;
   const tabs = useMemo(
-    () => (store?.menu ?? [])
-      .filter((m) => !ACCESSORY_HANDLES.has(m.collectionHandle))
-      .map((m) => ({ value: m.collectionHandle, label: m.label })),
-    [store?.menu],
+    () => (featured.data ? [{ value: featured.data.handle, label: featured.data.title }] : []),
+    [featured.data],
   );
+
   const [active, setActive] = useState(null);
+  useEffect(() => { setActive(drop); }, [drop]);
 
   return (
     <section className="section shell has-shelf" id="boutique">
@@ -42,7 +50,7 @@ export default function Shop({ onOpen, onAll }) {
           options={tabs}
           value={active}
           onChange={setActive}
-          onPreview={(c) => prefetch(homeGridQuery(c))}
+          onPreview={(c) => prefetch(homeGridQuery(c, false))}
           controls="shelf-wear"
           label="Filter ready-to-wear"
         />
@@ -50,6 +58,7 @@ export default function Shop({ onOpen, onAll }) {
       <Shelf
         id="shelf-wear"
         collection={active}
+        accessory={false}
         label="Ready-to-wear"
         onOpen={onOpen}
         onAll={onAll}

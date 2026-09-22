@@ -211,6 +211,66 @@ seo.get('/pages/:handle', async (c) => {
   );
 });
 
+/**
+ * The shop's own front page, written for a reader who is not a browser.
+ *
+ * Everything else here is a page about one thing — a piece, a collection.
+ * This is the house itself, so it carries the two things a search engine
+ * wants for a shop: who the business is, and how its search works. The
+ * address comes off APP_URL, so the same code is right on every domain.
+ */
+seo.get('/', async (c) => {
+  const s = await getSettings(c.get('db'));
+  const url = absolute(c, '/');
+  const title = `${s.name} — Épicée. Libre.`;
+  const description =
+    'Luxury prêt-à-porter, designed and produced in limited quantities in Lebanon. Ready-to-wear, jewellery and accessories from Follies d\'Après-Midi, Beirut.';
+  const image = absolute(c, '/film/hero-end.jpg');
+  const instagram = s.instagram ? `https://instagram.com/${s.instagram.replace(/^@/, '')}` : null;
+
+  const organization = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': `${url}#organization`,
+    name: s.name,
+    url,
+    logo: absolute(c, '/brand/icon-512.png'),
+    image,
+    description,
+    email: s.contactEmail || undefined,
+    telephone: s.contactPhone || undefined,
+    address: { '@type': 'PostalAddress', addressLocality: 'Beirut', addressCountry: 'LB' },
+    sameAs: instagram ? [instagram] : undefined,
+  };
+
+  const website = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${url}#website`,
+    name: s.name,
+    url,
+    publisher: { '@id': `${url}#organization` },
+    inLanguage: 'en',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: { '@type': 'EntryPoint', urlTemplate: `${url}search?q={search_term_string}` },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+
+  /* What a crawler reads before the shop has run a line of JavaScript. */
+  const snapshot = `<main class="prerender"><h1>${escapeHtml(s.name)}</h1>
+<p>${escapeHtml(description)}</p>
+<p><a href="/collections/all">The boutique</a></p></main>`;
+
+  return renderShell(
+    c,
+    { title, description, canonical: url, image, type: 'website', jsonLd: [organization, website], initial: null, snapshot },
+    200,
+    [],
+  );
+});
+
 seo.get('/sitemap.xml', async (c) => {
   const d1 = c.env.DB;
   const base = c.env.APP_URL.replace(/\/$/, '');

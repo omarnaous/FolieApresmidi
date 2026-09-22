@@ -20,12 +20,17 @@ export const TAGS = {
 export const cacheTagHeader = (...tags: string[]) => ({ 'cache-tag': [...new Set(tags)].join(',') });
 
 /**
- * Public and cached at the edge for a few minutes, where a write purges it by
- * tag — but never held by the browser: `max-age=0` means a shopper's reload
- * always asks again, so a change made in the admin is on the site at once
- * rather than up to a minute later.
+ * Not cached anywhere. The shop is asked afresh on every request, by the
+ * browser and by the edge alike.
+ *
+ * It used to be held at the edge for five minutes and purged by tag on every
+ * write. That is faster and cheaper, but a direct change to the database —
+ * which is how this shop is often changed — purges nothing, so the site went
+ * on serving what it had until the five minutes were up. Correct beats quick
+ * at this size: a shop selling a few dozen pieces a day is nowhere near the
+ * volume where the edge cache earns its confusion.
  */
-export const PUBLIC_CACHE = 'public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=600';
+export const PUBLIC_CACHE = 'no-store';
 
 /** The part of an execution context background work needs (Hono's and the runtime's both fit). */
 export interface BackgroundCtx {

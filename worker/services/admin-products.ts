@@ -90,16 +90,16 @@ export async function saveProductCore(d1: D1Database, id: string | null, input: 
     existing
       ? d1
           .prepare(
-            `UPDATE products SET handle = ?, title = ?, description_html = ?, description_text = ?, status = ?, product_type = ?, vendor = ?,
+            `UPDATE products SET handle = ?, title = ?, description_html = ?, description_text = ?, status = ?, product_type = ?, is_accessory = ?, vendor = ?,
                     seo_title = ?, seo_description = ?, published_at = ?, updated_at = ? WHERE id = ?`,
           )
-          .bind(handle, input.title, descriptionHtml, plainText(descriptionHtml), input.status, input.productType, input.vendor, input.seoTitle, input.seoDescription, publishedAt, now, productId)
+          .bind(handle, input.title, descriptionHtml, plainText(descriptionHtml), input.status, input.productType, input.isAccessory ? 1 : 0, input.vendor, input.seoTitle, input.seoDescription, publishedAt, now, productId)
       : d1
           .prepare(
-            `INSERT INTO products (id, handle, title, description_html, description_text, status, product_type, vendor, seo_title, seo_description, position, published_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), 0) + 1 FROM products), ?, ?, ?)`,
+            `INSERT INTO products (id, handle, title, description_html, description_text, status, product_type, is_accessory, vendor, seo_title, seo_description, position, published_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), 0) + 1 FROM products), ?, ?, ?)`,
           )
-          .bind(productId, handle, input.title, descriptionHtml, plainText(descriptionHtml), input.status, input.productType, input.vendor, input.seoTitle, input.seoDescription, publishedAt, now, now),
+          .bind(productId, handle, input.title, descriptionHtml, plainText(descriptionHtml), input.status, input.productType, input.isAccessory ? 1 : 0, input.vendor, input.seoTitle, input.seoDescription, publishedAt, now, now),
 
     // options are small; replace them wholesale
     d1.prepare('DELETE FROM product_option_values WHERE option_id IN (SELECT id FROM product_options WHERE product_id = ?)').bind(productId),
@@ -250,6 +250,7 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
     descriptionHtml: p.description_html as string,
     status: p.status as AdminProductDTO['status'],
     productType: p.product_type as string,
+    isAccessory: !!p.is_accessory,
     vendor: (p.vendor as string | null) ?? null,
     tags: ((tags?.results ?? []) as { name: string }[]).map((t) => t.name),
     seoTitle: (p.seo_title as string | null) ?? null,

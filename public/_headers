@@ -24,5 +24,9 @@
 /checkout
   X-Robots-Tag: noindex
 
+# Vite stamps a hash of the contents into every one of these filenames, so a
+# changed file is a different URL and an old one can never be served in its
+# place. Keeping them is the one cache that cannot go stale — and without it
+# every page load fetches the whole shop again.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

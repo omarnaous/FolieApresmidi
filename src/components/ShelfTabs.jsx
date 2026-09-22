@@ -83,7 +83,10 @@ export default function ShelfTabs({ options, value, onChange, onPreview, control
     tabs.current[to]?.focus();
   };
 
-  if (options.length < 2) return null;
+  /* One tab is not a choice, but it is still a name: where a shelf holds a
+     single collection the word stands over it, underlined, the way the
+     others do. Nothing at all is what an empty row gets. */
+  if (options.length === 0) return null;
 
   return (
     <div className="tabs" role="tablist" aria-label={label} ref={list} onKeyDown={onKeyDown}>

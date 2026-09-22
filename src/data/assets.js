@@ -36,12 +36,16 @@ export const FEED = [
 ];
 
 /**
- * The hero film: the campaign film from the Shopify storefront with the
- * wordmark over it. Three cuts of the same 4:3 master (1440×1080, 25 fps,
- * 11.5 s), audio stripped, and its last frame as a still — the film rests
- * on the still (a paused video is not reliably painted) and falls back to
- * it if the video cannot play. The figure and the tree sit in the lower
- * right of the frame.
+ * The hero film: the campaign film from the Shopify storefront. Three cuts
+ * of the same 4:3 master (1440×1080, 25 fps, 11.5 s), audio stripped, and
+ * its last frame as a still — the still sits behind the video, so a film
+ * that has not started, or is between passes, still shows a picture. The
+ * figure and the tree sit in the lower right of the frame.
+ *
+ * It is a locked-off plate, so it compresses extraordinarily hard: the full
+ * 1440×1080 cut is 1.0 MB and measures identical to an 8.8 MB encode of the
+ * same master (SSIM 1.000). Every screen is therefore given the whole
+ * resolution; the smaller cuts are kept for a metered connection.
  */
 export const OPENING = {
   1080: asset('film/hero-1080.mp4'),

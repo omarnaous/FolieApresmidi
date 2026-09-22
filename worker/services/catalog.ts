@@ -133,6 +133,7 @@ export async function productDTOs(db: DB, rows: ProductRow[]): Promise<ProductDT
       description: p.descriptionText,
       descriptionHtml: p.descriptionHtml,
       productType: p.productType,
+      isAccessory: p.isAccessory,
       vendor: p.vendor,
       tags: (tagsBy.get(p.id) ?? []).map((t) => t.name),
       price: cheapest?.price ?? 0,
@@ -160,6 +161,7 @@ const rowFrom = (r: Record<string, unknown>): ProductRow => ({
   descriptionText: r.description_text as string,
   status: r.status as ProductRow['status'],
   productType: r.product_type as string,
+  isAccessory: !!r.is_accessory,
   vendor: (r.vendor as string | null) ?? null,
   seoTitle: (r.seo_title as string | null) ?? null,
   seoDescription: (r.seo_description as string | null) ?? null,
@@ -206,6 +208,8 @@ export interface ListParams {
   min?: number | undefined;
   max?: number | undefined;
   available?: boolean | undefined;
+  /** true for the accessories alone, false for everything but them. */
+  accessory?: boolean | undefined;
   sort: ProductSort;
   offset: number;
   limit: number;
@@ -257,6 +261,10 @@ function baseWhere(p: ListParams, fts: string | null): Where {
   if (p.tag) {
     w.sql.push(`p.id IN (SELECT pt.product_id FROM product_tags pt JOIN tags t ON t.id = pt.tag_id WHERE lower(t.name) = lower(?))`);
     w.params.push(p.tag);
+  }
+  if (p.accessory !== undefined) {
+    w.sql.push(`p.is_accessory = ?`);
+    w.params.push(p.accessory ? 1 : 0);
   }
   if (p.type) {
     w.sql.push(`lower(p.product_type) = lower(?)`);
