@@ -169,6 +169,9 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   border-top: 1px solid var(--ink-14);
   flex-wrap: wrap;
 }
+/* The first section has the film above it, not another section. A rule
+   there reads as a line drawn under the hero rather than over the house. */
+#maison .sec-head { border-top: 0; padding-top: 0; }
 
 /* ── Plate: the house image grade ────────────────────────── */
 
@@ -696,6 +699,11 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 @media (max-width: 860px) { .foot-cols { grid-template-columns: 1fr; row-gap: 32px; } }
 .foot-col { display: flex; flex-direction: column; gap: 11px; align-items: flex-start; }
 .foot-col .label { margin-bottom: 8px; color: var(--bone-40); }
+/* The house's name at the foot, set in its own orange.
+   The gradient runs warm at the F and deepens across to the S, so a word
+   this wide is not one flat slab of colour — a didone's thin strokes catch
+   the light end, its thick ones the dark. A quiet glow sits under it, the
+   way a sign does against a dark wall. */
 .foot-word {
   font-family: var(--didone);
   font-size: clamp(42px, 15.5vw, 260px);
@@ -705,6 +713,19 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   padding-bottom: 0.06em;
   white-space: nowrap;
   overflow: hidden;
+  background: linear-gradient(96deg, #ff7a3d 0%, var(--terra) 38%, var(--chili) 78%, #a8320a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 6px 42px rgba(241, 88, 34, 0.28));
+}
+/* Paint cannot be clipped to letters that are being wiped in, so the
+   curtain carries the gradient and the word rides inside it. */
+.foot-word .rv-curtain {
+  background: inherit;
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 .foot-base {
   display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap;

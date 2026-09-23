@@ -727,3 +727,10 @@
   .adm .adm-slip__table th:last-child { text-align: right; width: 50pt; }
   .adm .adm-slip__thanks { margin-top: 24pt; font-family: var(--serif); font-style: italic; font-size: 14pt; }
 }
+
+/* ── Two-factor setup ─────────────────────────────────────── */
+.adm-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; color: var(--ink-80); font-size: 13px; line-height: 1.5; }
+.adm-secret { display: inline-flex; align-items: center; gap: 12px; margin-top: 8px; padding: 8px 12px; background: var(--a-tile); border-radius: 3px; }
+.adm-secret code { font-size: 14px; letter-spacing: 0.08em; }
+.adm-backup { list-style: none; margin: 0; padding: 14px 16px; background: var(--a-tile); border-radius: 3px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+.adm-backup li { font-size: 14px; letter-spacing: 0.06em; }

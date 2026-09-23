@@ -14,6 +14,7 @@ import { Card, PageHeader } from '../ui/layout';
 import { ConfirmDialog, Modal } from '../ui/Modal';
 import { DataTable } from '../ui/Table';
 import { useToast } from '../ui/Toasts';
+import { TwoFactorCard } from './TwoFactor';
 
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', staff: 'Staff' } as const;
 const STATUS_META: Record<StaffDTO['status'], { label: string; tone: Tone }> = {
@@ -135,6 +136,9 @@ export default function StaffPage() {
   return (
     <>
       <PageHeader title="Staff" actions={invite} />
+      <div className="adm-stack" style={{ marginBottom: 'var(--a-gutter)' }}>
+        <TwoFactorCard />
+      </div>
       <Card flush>
         {q.data ? (
           q.data.length === 0 ? (

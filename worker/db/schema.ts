@@ -340,6 +340,10 @@ export const staffUsers = sqliteTable(
     status: text('status', { enum: ['invited', 'active', 'disabled'] }).notNull().default('invited'),
     sessionEpoch: integer('session_epoch').notNull().default(0),
     lastLoginAt: integer('last_login_at'),
+    /** The authenticator secret, whether 2FA is on, and one-time backup codes. */
+    totpSecret: text('totp_secret'),
+    totpEnabled: bool('totp_enabled').notNull().default(false),
+    backupCodesJson: text('backup_codes_json').notNull().default('[]'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

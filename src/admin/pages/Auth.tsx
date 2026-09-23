@@ -4,11 +4,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   AcceptInviteInput,
   AdminLoginInput,
+  AdminLoginVerifyInput,
   AdminSetupInput,
   ForgotPasswordInput,
   post,
   ResetPasswordInput,
   type AdminSessionDTO,
+  type LoginChallengeDTO,
 } from '../lib/contract';
 import { apiFieldErrors, validate, type FieldErrors } from '../lib/forms';
 import { useDocumentTitle } from '../lib/hooks';
@@ -54,26 +56,85 @@ function useSessionMutation<V>(path: string, after?: () => void) {
 const PASSWORD_HINT = 'At least 10 characters.';
 
 export function LoginPage() {
+  const qc = useQueryClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { m, errors, setErrors } = useSessionMutation<{ email: string; password: string }>('/api/admin/auth/login');
+  const [code, setCode] = useState('');
+  // set once the password is accepted and a code is still needed
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
-  const submit = (e: FormEvent) => {
+  const land = (session: AdminSessionDTO) => qc.setQueryData(qk.session, session);
+
+  const login = useMutation({
+    mutationFn: (body: { email: string; password: string }) =>
+      post<AdminSessionDTO | LoginChallengeDTO>('/api/admin/auth/login', body),
+    onMutate: () => setErrors({}),
+    onSuccess: (res) => {
+      if ('twoFactorRequired' in res) setChallenge(res.challenge);
+      else land(res);
+    },
+    onError: (err) => setErrors(apiFieldErrors(err)),
+  });
+
+  const verify = useMutation({
+    mutationFn: (body: { challenge: string; code: string }) => post<AdminSessionDTO>('/api/admin/auth/login/verify', body),
+    onMutate: () => setErrors({}),
+    onSuccess: land,
+    onError: (err) => setErrors(apiFieldErrors(err)),
+  });
+
+  const submitPassword = (e: FormEvent) => {
     e.preventDefault();
-    if (m.isPending) return;
+    if (login.isPending) return;
     const body = { email, password };
     const invalid = validate(AdminLoginInput, body);
     if (invalid) return setErrors(invalid);
-    m.mutate(body);
+    login.mutate(body);
   };
+
+  const submitCode = (e: FormEvent) => {
+    e.preventDefault();
+    if (verify.isPending || !challenge) return;
+    const body = { challenge, code: code.trim() };
+    const invalid = validate(AdminLoginVerifyInput, body);
+    if (invalid) return setErrors(invalid);
+    verify.mutate(body);
+  };
+
+  if (challenge) {
+    return (
+      <AuthShell
+        title="Enter your code"
+        lede="Open your authenticator app and enter the six-digit code. Lost your phone? Use one of your backup codes."
+        footer={<button type="button" className="adm-link" onClick={() => { setChallenge(null); setCode(''); setErrors({}); }}>Back to sign in</button>}
+      >
+        <form className="adm-stack" onSubmit={submitCode} noValidate>
+          <ErrorBanner error={verify.error} />
+          <TextInput
+            label="Authentication code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            error={errors.code}
+            onChange={(e) => setCode(e.target.value)}
+            autoFocus
+          />
+          <Button type="submit" variant="primary" loading={verify.isPending} className="adm-btn--block">
+            Verify
+          </Button>
+        </form>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell title="Sign in" footer={<Link to="/admin/forgot">Forgot your password?</Link>}>
-      <form className="adm-stack" onSubmit={submit} noValidate>
-        <ErrorBanner error={m.error} />
+      <form className="adm-stack" onSubmit={submitPassword} noValidate>
+        <ErrorBanner error={login.error} />
         <TextInput label="Email" type="email" autoComplete="username" value={email} error={errors.email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <TextInput label="Password" type="password" autoComplete="current-password" value={password} error={errors.password} onChange={(e) => setPassword(e.target.value)} />
-        <Button type="submit" variant="primary" loading={m.isPending} className="adm-btn--block">
+        <Button type="submit" variant="primary" loading={login.isPending} className="adm-btn--block">
           Sign in
         </Button>
       </form>

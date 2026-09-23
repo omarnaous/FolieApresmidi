@@ -685,6 +685,8 @@ export interface StaffDTO {
   /** effective permissions (owner/admin get all) */
   permissions: Permission[];
   status: 'invited' | 'active' | 'disabled';
+  /** Whether the account signs in with a second factor. */
+  twoFactorEnabled: boolean;
   lastLoginAt: Timestamp | null;
   createdAt: Timestamp;
 }
@@ -698,6 +700,32 @@ export interface AdminSessionDTO {
 }
 
 export const AdminLoginInput = z.object({ email: zEmail, password: z.string().min(1, 'Required').max(128) });
+
+/** A six-digit authenticator code, or a backup code with its dash. */
+const zTotpCode = z.string().trim().min(6).max(14);
+
+/** The second step of sign-in: the challenge handed back, and the code for it. */
+export const AdminLoginVerifyInput = z.object({
+  challenge: z.string().min(1).max(400),
+  code: zTotpCode,
+});
+export const TwoFactorEnableInput = z.object({ code: z.string().trim().regex(/^\d{6}$/, 'Six digits') });
+export const TwoFactorDisableInput = z.object({ password: z.string().min(1).max(128) });
+
+/** What /auth/2fa/setup hands back so the app can be paired. */
+export interface TwoFactorSetupDTO {
+  secret: string;
+  otpauthUri: string;
+}
+/** Turning it on returns the codes to keep — shown once, never again. */
+export interface TwoFactorEnabledDTO {
+  backupCodes: string[];
+}
+/** A login that got the password right but still needs a code. */
+export interface LoginChallengeDTO {
+  twoFactorRequired: true;
+  challenge: string;
+}
 export const AdminSetupInput = z.object({
   setupToken: z.string().min(1).max(200),
   email: zEmail,
