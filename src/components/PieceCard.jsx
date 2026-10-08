@@ -20,7 +20,7 @@ const SIZES = {
  *             drop, the label says what the piece is instead of repeating
  *             the drop's name
  */
-export default function PieceCard({ product: p, index, total, onOpen, showDrop, rail = false, price = false }) {
+export default function PieceCard({ product: p, index, total, onOpen, showDrop, rail = false, price = false, showTag = true }) {
   const { data: store } = useStore();
   const money = useMoney();
   const [a, b] = p.images;
@@ -86,7 +86,7 @@ export default function PieceCard({ product: p, index, total, onOpen, showDrop, 
             )}
           </div>
 
-          {tag && <span className="rc-tag" aria-hidden="true">{tag}</span>}
+          {showTag && tag && <span className="rc-tag" aria-hidden="true">{tag}</span>}
           {!p.available && <span className="rc-flag label">Sold out</span>}
           <span className="rc-view label" aria-hidden="true">View piece</span>
         </div>

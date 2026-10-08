@@ -28,14 +28,22 @@ export default function Shop({ onOpen, onAll }) {
   const copy = store?.home?.boutique;
   const heading = copy?.heading || ((store?.featuredCollectionHandle && !featured.isError ? featured.data?.title : store?.name) ?? ' ');
 
-  // the drop names itself: one tab, carrying the featured collection's title
+  // every collection on the menu becomes a tab here, the way the catalogue
+  // has them, so each drop's name shows on the home page and a shopper can
+  // move between them. The featured drop leads and is what opens first.
   const drop = store?.featuredCollectionHandle ?? null;
-  const tabs = useMemo(
-    () => (featured.data ? [{ value: featured.data.handle, label: featured.data.title }] : []),
-    [featured.data],
-  );
+  const tabs = useMemo(() => {
+    const rows = (store?.menu ?? [])
+      .filter((m) => m.collectionHandle)
+      .map((m) => ({ value: m.collectionHandle, label: m.label }));
+    if (featured.data && !rows.some((t) => t.value === featured.data.handle)) {
+      rows.unshift({ value: featured.data.handle, label: featured.data.title });
+    }
+    return rows;
+  }, [store?.menu, featured.data]);
 
   const [active, setActive] = useState(null);
+  // follow the featured drop; a shopper's own tab pick is left alone
   useEffect(() => { setActive(drop); }, [drop]);
 
   return (

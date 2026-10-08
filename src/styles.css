@@ -412,10 +412,12 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
     background 0.6s var(--ease), border-color 0.6s var(--ease);
 }
 .nav.solid {
-  color: var(--ink);
-  background: rgba(242, 237, 230, 0.86);
-  backdrop-filter: blur(14px) saturate(1.2);
-  border-bottom-color: var(--ink-14);
+  /* past the film, the bar turns the house orange and the name reads in bone */
+  color: var(--bone);
+  background: linear-gradient(180deg, #f2622f 0%, var(--terra) 100%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-bottom-color: transparent;
 }
 
 /* Over the film the bar carries no paper, so it is given a breath of ink
@@ -431,31 +433,52 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 }
 
 .nav-mark {
-  /* the name, in the face the logo is drawn in */
-  font-family: var(--didone);
-  font-size: 21px;
-  letter-spacing: 0.06em;
-  line-height: 1;
+  /* the house mark, held dead centre */
+  justify-self: center;
+  display: flex;
+  align-items: center;
 }
-.nav-links { display: flex; gap: clamp(18px, 2.4vw, 36px); justify-self: center; }
-.nav-right { display: flex; gap: clamp(14px, 1.8vw, 26px); justify-self: end; align-items: center; }
-.nav-cart { display: flex; align-items: center; gap: 7px; }
-.nav-count {
+.nav-logo { height: 38px; width: auto; display: block; }
+
+.nav-left { display: flex; gap: 4px; justify-self: start; align-items: center; }
+.nav-right { display: flex; gap: 4px; justify-self: end; align-items: center; }
+/* the sections, spelled out — desk only */
+.nav-links { display: flex; align-items: center; gap: clamp(16px, 2vw, 30px); }
+
+/* the line-icon buttons that flank the mark */
+.nav-ico {
   display: grid; place-items: center;
-  min-width: 17px; height: 17px;
-  padding-inline: 4px;
+  width: 40px; height: 40px;
+  background: none; border: 0; color: inherit;
+  cursor: pointer; border-radius: 999px;
+  transition: opacity 0.3s var(--ease);
+}
+.nav-ico:hover { opacity: 0.6; }
+.nav-bag { position: relative; }
+.nav-count {
+  position: absolute; top: 2px; right: 2px;
+  display: grid; place-items: center;
+  min-width: 15px; height: 15px;
+  padding-inline: 3px;
   border-radius: 999px;
   background: var(--chili);
   color: var(--bone);
   font-size: 9px; font-weight: 600; letter-spacing: 0;
 }
-.nav-burger { display: none; }
+
+/* on orange, the bag count reverses so it stays legible */
+.nav.solid .nav-count { background: var(--bone); color: var(--chili); }
+
+/* desk shows the section links + a search by the bag; the burger and the
+   search-by-the-menu are the phone's, hidden here */
+.nav-burger,
+.nav-search-m { display: none; }
 
 @media (max-width: 860px) {
-  .nav-links { display: none; }
-  .nav-burger { display: block; }
-  .nav { grid-template-columns: 1fr auto; }
-  .nav-right { gap: 16px; }
+  .nav-links,
+  .nav-search-d { display: none; }
+  .nav-burger,
+  .nav-search-m { display: grid; }
 }
 
 /* ══ HERO ════════════════════════════════════════════════ */
@@ -1375,6 +1398,9 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   background: var(--bone);
 }
 .cat-bar-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+
+/* in the plain search the field's own rule is line enough — drop the section divider */
+.cat.is-search .cat-bar { border-bottom: 0; }
 
 /* One ruled line, not a pill: the query is set in the serif like a title. */
 .cat-search {
@@ -2576,10 +2602,9 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
     backdrop-filter: none;
   }
 
-  /* denser, so nothing reads through what the blur used to hide. Only the
-     solid bar: over the film the bar is transparent and set in bone, and
-     giving it paper here painted the name and the links out of sight. */
-  .nav.solid { background: rgba(242, 237, 230, 0.97); }
+  /* the solid bar is the house orange on a phone too; over the film it stays
+     transparent and set in bone. */
+  .nav.solid { background: linear-gradient(180deg, #f2622f 0%, var(--terra) 100%); }
   .pdp-bar, .co-bar, .pdp-dock { background: rgba(242, 237, 230, 0.98); }
   .floors-index { background: rgba(242, 237, 230, 0.97); }
   .floors-dial { background: rgba(12, 11, 10, 0.72); }

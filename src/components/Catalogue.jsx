@@ -22,14 +22,15 @@ const RELEVANCE = { key: 'relevance', label: 'Relevance' };
 const PAGE = 24;
 
 /** The catalogue's URL for a collection and a set of refinements — the URL is the state. */
-function catalogueUrl(handle, { q, sort, options, available }) {
+function catalogueUrl(handle, { q, sort, options, available, search }) {
   const p = new URLSearchParams();
   if (q) p.set('q', q);
   if (sort) p.set('sort', sort);
   options.forEach((o) => p.append('option', o));
   if (available) p.set('available', '1');
   const s = p.toString();
-  const base = handle !== 'all' ? `/collections/${handle}` : q ? '/search' : '/collections/all';
+  // clearing a search stays in the search view, not the filtered collection
+  const base = handle !== 'all' ? `/collections/${handle}` : q || search ? '/search' : '/collections/all';
   return s ? `${base}?${s}` : base;
 }
 
@@ -44,9 +45,10 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   const input = useRef(null);
 
   const view = useMemo(() => {
-    const { handle, params } = parseCatalogue(current ?? '/collections/all');
+    const { base, handle, params } = parseCatalogue(current ?? '/collections/all');
     const q = params.get('q')?.trim() ?? '';
     return {
+      base,
       handle,
       q,
       sortParam: params.get('sort'),
@@ -56,6 +58,9 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     };
   }, [current]);
   const { handle, q, sort, sortParam, options, available } = view;
+  // the plain search — reached by the search icon — is just a field and its
+  // results: no category tabs, no facets, no sort.
+  const isSearch = view.base === '/search';
 
   const [text, setText] = useState(q);
   const pushed = useRef(q);
@@ -64,10 +69,10 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
      opens on exactly this view and Back still closes the catalogue. */
   const go = useCallback((next, to = handle) => {
     navigate(
-      catalogueUrl(to, { q, sort: sortParam, options, available, ...next }),
+      catalogueUrl(to, { q, sort: sortParam, options, available, search: isSearch, ...next }),
       { replace: true, state: location.state },
     );
-  }, [navigate, location.state, handle, q, sortParam, options, available]);
+  }, [navigate, location.state, handle, q, sortParam, options, available, isSearch]);
 
   // the URL moved without us (opened afresh, the back button): the field follows it
   useEffect(() => {
@@ -103,7 +108,9 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     limit: PAGE,
   }), [handle, q, options, available, sort]);
 
-  const list = useProducts(query, { enabled: !!current });
+  // a plain search shows nothing until something is typed — no query, no grid
+  const armed = !!current && !(isSearch && !q);
+  const list = useProducts(query, { enabled: armed });
   const collection = useCollection(handle === 'all' ? null : handle);
   const suggest = useSuggest(q);
 
@@ -162,22 +169,22 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     : null;
   const sorts = q ? [RELEVANCE, ...SORTS] : SORTS;
   const suggestions = (suggest.data?.collections ?? []).filter((c) => c.handle !== handle).slice(0, 3);
-  const title = handle === 'all' ? 'All pieces' : collection.data?.title ?? (collection.isError ? 'All pieces' : ' ');
+  const title = isSearch ? 'Search' : handle === 'all' ? 'All pieces' : collection.data?.title ?? (collection.isError ? 'All pieces' : ' ');
 
   const reset = () => {
     pushed.current = '';
     setText('');
-    navigate('/collections/all', { replace: true, state: location.state });
+    navigate(isSearch ? '/search' : '/collections/all', { replace: true, state: location.state });
   };
 
   return (
     // data-lenis-prevent so the results list and the option rows still scroll on
     // touch: a stopped Lenis preventDefaults every touchmove it sees.
-    <div className={`cat ${open ? 'on' : ''}`} aria-hidden={!open} data-lenis-prevent>
+    <div className={`cat ${open ? 'on' : ''} ${isSearch ? 'is-search' : ''}`} aria-hidden={!open} data-lenis-prevent>
       <div className="cat-bar shell">
         <div className="cat-bar-top">
           <div>
-            <div className="label muted">Catalogue</div>
+            <div className="label muted">{isSearch ? 'Search' : 'Catalogue'}</div>
             <h2 className="display d-sm" style={{ marginTop: 6 }}>{title}</h2>
           </div>
           <button className="label link-u" onClick={onClose} data-cursor="Close">Close</button>
@@ -199,14 +206,17 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
           {text && <button type="button" className="label link-u" onClick={() => setText('')}>Clear</button>}
         </div>
 
-        <ShelfTabs
-          options={tabs}
-          value={handle}
-          onChange={(to) => go({ options: [] }, to)}
-          controls="cat-results"
-          label="Categories"
-        />
+        {!isSearch && (
+          <ShelfTabs
+            options={tabs}
+            value={handle}
+            onChange={(to) => go({ options: [] }, to)}
+            controls="cat-results"
+            label="Categories"
+          />
+        )}
 
+        {!isSearch && (
         <div className="cat-opts">
           <div className="opts" role="group" aria-label="Refine">
             <button type="button" className={`opt ${available ? 'on' : ''}`} aria-pressed={available} onClick={() => go({ available: !available })}>
@@ -252,7 +262,9 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
             ))}
           </div>
         </div>
+        )}
 
+        {!isSearch && (
         <div className="cat-count label muted" aria-live="polite">
           {list.isPending ? 'Looking…' : `${total} ${total === 1 ? 'piece' : 'pieces'}`}
           {range ? ` · ${range}` : ''}
@@ -266,10 +278,16 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
             </React.Fragment>
           ))}
         </div>
+        )}
       </div>
 
       <div className="cat-body shell" id="cat-results">
-        {list.isError && !list.data ? (
+        {isSearch && !q ? (
+          <div className="cat-empty cat-prompt">
+            <span className="display d-sm">What are you looking for?</span>
+            <span className="label muted">A name, a colour, a size, a fabric.</span>
+          </div>
+        ) : list.isError && !list.data ? (
           <div className="cat-empty" role="alert">
             <span className="display d-sm">The catalogue did not load.</span>
             <span className="label muted">Check your connection, then try again.</span>
@@ -292,7 +310,7 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
                   blank until it was scrolled to. */}
               {results.map((p, i) => (
                 <div className="cat-in" key={p.id} style={{ '--n': i % 8 }}>
-                  <PieceCard product={p} index={i} onOpen={onOpen} showDrop={false} price />
+                  <PieceCard product={p} index={i} onOpen={onOpen} showDrop={false} price={!isSearch} showTag={!isSearch} />
                 </div>
               ))}
             </div>

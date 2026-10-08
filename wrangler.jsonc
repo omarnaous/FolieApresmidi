@@ -111,6 +111,8 @@
         }
       ],
       "kv_namespaces": [{ "binding": "KV", "id": "8042fc09a84d4b59b78ea6f78d81793f" }],
+      // R2 free tier: the shop serves its own image copies instead of Shopify's
+      "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "fdm-media" }],
       "ratelimits": [
         { "name": "RL_AUTH", "namespace_id": "4001", "simple": { "limit": 10, "period": 60 } },
         { "name": "RL_CHECKOUT", "namespace_id": "4002", "simple": { "limit": 30, "period": 60 } },
