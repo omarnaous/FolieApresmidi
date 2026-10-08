@@ -2,7 +2,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import {
   HomeInput,
+  imageSrc,
   MAX_FLOORS,
+  MAX_LOOKBOOK,
   MAX_POPUPS,
   put,
   type AdminHomeDTO,
@@ -18,9 +20,9 @@ import { Button, IconButton } from '../../ui/Button';
 import { CollectionSelect } from '../../ui/CollectionSelect';
 import { ErrorBanner, FormErrorSummary, QueryState } from '../../ui/feedback';
 import { Select, Textarea, TextInput, Toggle } from '../../ui/form';
-import { IconArrowDown, IconArrowUp, IconPlus, IconTrash } from '../../ui/icons';
+import { IconArrowDown, IconArrowUp, IconChevronLeft, IconChevronRight, IconPlus, IconTrash } from '../../ui/icons';
 import { Card, PageHeader, SaveBar } from '../../ui/layout';
-import { SingleImageField } from '../../ui/media';
+import { ImageUploader, SingleImageField } from '../../ui/media';
 import { SiteFileField } from '../../ui/SiteFile';
 import { WebsiteTabs } from './Tabs';
 import { useToast } from '../../ui/Toasts';
@@ -65,6 +67,9 @@ interface HomeDraft {
   boutiqueIntro: string;
   accessoriesHeading: string;
   accessoriesIntro: string;
+  lookbookHeading: string;
+  lookbookIntro: string;
+  lookbook: MediaDTO[];
   journalHeading: string;
   journalIntro: string;
   journalButton: string;
@@ -87,6 +92,9 @@ const fromDTO = (h: AdminHomeDTO): HomeDraft => ({
   boutiqueIntro: h.boutique.intro ?? '',
   accessoriesHeading: h.accessories.heading,
   accessoriesIntro: h.accessories.intro ?? '',
+  lookbookHeading: h.lookbook.heading,
+  lookbookIntro: h.lookbook.intro ?? '',
+  lookbook: h.lookbook.images,
   journalHeading: h.journal.heading,
   journalIntro: h.journal.intro,
   journalButton: h.journal.buttonLabel,
@@ -164,6 +172,11 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
       })),
       boutique: { heading: draft.boutiqueHeading.trim() || null, intro: draft.boutiqueIntro.trim() || null },
       accessories: { heading: draft.accessoriesHeading, intro: draft.accessoriesIntro.trim() || null },
+      lookbook: {
+        heading: draft.lookbookHeading,
+        intro: draft.lookbookIntro.trim() || null,
+        imageMediaIds: draft.lookbook.map((m) => m.id),
+      },
       journal: {
         heading: draft.journalHeading,
         intro: draft.journalIntro,
@@ -422,6 +435,60 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
               hint="Shown under the title."
               onChange={(e) => set('accessoriesIntro', e.target.value)}
             />
+          </div>
+        </Card>
+
+        <Card title="The look book">
+          <div className="adm-stack">
+            <p className="adm-field__hint">
+              The house's photographs on their own — no piece, no price. They run as a swipe-through on the home page, between {accessoriesName} and Limited edition, and open in full from the “View the look book” button. While none are set, the shop shows its own set.
+            </p>
+            <div className="adm-grid adm-grid--2">
+              <TextInput
+                label="Heading"
+                value={draft.lookbookHeading}
+                maxLength={80}
+                error={errors['lookbook.heading']}
+                hint="Wrap words in *asterisks* to set them in italics."
+                onChange={(e) => set('lookbookHeading', e.target.value)}
+              />
+              <TextInput
+                label="Line beside it"
+                optional
+                value={draft.lookbookIntro}
+                maxLength={240}
+                error={errors['lookbook.intro']}
+                onChange={(e) => set('lookbookIntro', e.target.value)}
+              />
+            </div>
+            {draft.lookbook.length > 0 && (
+              <ul className="adm-mediagrid">
+                {draft.lookbook.map((m, i) => (
+                  <li key={m.id} className="adm-mediagrid__item">
+                    <img decoding="async" src={imageSrc(m, 320)} alt={m.alt} loading="lazy" />
+                    {errors[`lookbook.images.${i}`] && <span className="adm-mediagrid__warn">{errors[`lookbook.images.${i}`]}</span>}
+                    <div className="adm-mediagrid__tools">
+                      <IconButton label={`Move look ${i + 1} earlier`} disabled={i === 0} onClick={() => set('lookbook', moveItem(draft.lookbook, i, i - 1))}>
+                        <IconChevronLeft size={14} />
+                      </IconButton>
+                      <IconButton
+                        label={`Move look ${i + 1} later`}
+                        disabled={i === draft.lookbook.length - 1}
+                        onClick={() => set('lookbook', moveItem(draft.lookbook, i, i + 1))}
+                      >
+                        <IconChevronRight size={14} />
+                      </IconButton>
+                      <IconButton label={`Remove look ${i + 1}`} tone="danger" onClick={() => set('lookbook', draft.lookbook.filter((x) => x.id !== m.id))}>
+                        <IconTrash size={14} />
+                      </IconButton>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {draft.lookbook.length < MAX_LOOKBOOK && (
+              <ImageUploader onUploaded={(items) => set('lookbook', [...draft.lookbook, ...items])} />
+            )}
           </div>
         </Card>
 

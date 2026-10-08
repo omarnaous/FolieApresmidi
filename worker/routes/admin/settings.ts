@@ -134,6 +134,7 @@ adminSettings.put('/home', staffOnly('settings:write'), json(HomeInput), async (
   const mediaIds = [
     ...new Set([
       ...home.floors.flatMap((f) => (f.imageMediaId ? [f.imageMediaId] : [])),
+      ...home.lookbook.imageMediaIds,
       ...(home.hero.videoMediaId ? [home.hero.videoMediaId] : []),
       ...(home.journal.notebookMediaId ? [home.journal.notebookMediaId] : []),
     ]),
@@ -143,6 +144,9 @@ adminSettings.put('/home', staffOnly('settings:write'), json(HomeInput), async (
     const known = new Set(results.map((r) => r.id));
     home.floors.forEach((f, i) => {
       if (f.imageMediaId && !known.has(f.imageMediaId)) fields[`floors.${i}.imageMediaId`] = 'That image no longer exists';
+    });
+    home.lookbook.imageMediaIds.forEach((id, i) => {
+      if (!known.has(id)) fields[`lookbook.images.${i}`] = 'That image no longer exists';
     });
     if (home.hero.videoMediaId && !known.has(home.hero.videoMediaId)) fields['hero.videoMediaId'] = 'That video no longer exists — upload it again';
     if (home.journal.notebookMediaId && !known.has(home.journal.notebookMediaId)) fields['journal.notebookMediaId'] = 'That notebook no longer exists — upload it again';

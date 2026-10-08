@@ -11,6 +11,7 @@ import Maison from './components/Maison';
 import Shop from './components/Shop';
 import Accessories from './components/Accessories';
 import Lookbook from './components/Lookbook';
+import LookbookSheet from './components/LookbookSheet';
 import Catalogue from './components/Catalogue';
 import Editorial from './components/Editorial';
 import PopUps from './components/PopUps';
@@ -187,6 +188,7 @@ export default function App() {
         onClose={closeOverlay}
         onOpen={openFromCatalogue}
       />
+      <LookbookSheet open={route.kind === 'lookbook'} onClose={closeOverlay} />
       <CartDrawer open={cartOpen} onClose={closeBag} onCheckout={checkout} />
       <Checkout open={route.kind === 'checkout'} onClose={closeOverlay} />
       <OrderSheet token={route.kind === 'order' ? route.token : null} onClose={closeOverlay} />

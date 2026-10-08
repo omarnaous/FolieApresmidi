@@ -18,6 +18,7 @@ export type Route =
   | { kind: 'home' }
   | { kind: 'product'; handle: string }
   | { kind: 'catalogue' }
+  | { kind: 'lookbook' }
   | { kind: 'cart' }
   | { kind: 'checkout' }
   | { kind: 'order'; token: string }
@@ -28,6 +29,7 @@ export function parseRoute(pathname: string): Route {
   const product = at('/products/:handle');
   if (product?.params.handle) return { kind: 'product', handle: product.params.handle };
   if (at('/collections/:handle') || at('/search')) return { kind: 'catalogue' };
+  if (at('/lookbook')) return { kind: 'lookbook' };
   if (at('/cart')) return { kind: 'cart' };
   if (at('/checkout')) return { kind: 'checkout' };
   const order = at('/orders/:token');

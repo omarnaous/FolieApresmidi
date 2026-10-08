@@ -223,6 +223,8 @@ export interface HomeDTO {
   boutique: { heading: string | null; intro: string | null };
   /** The Accessories section's title and the line under it. */
   accessories: { heading: string; intro: string | null };
+  /** The look book: the house's photographs on their own — no piece, no price. */
+  lookbook: { heading: string; intro: string | null; images: MediaDTO[] };
   /** Limited edition: the words, the button under them, and the notebook it downloads. */
   journal: { heading: string; intro: string; buttonLabel: string; notebook: MediaDTO | null };
   popups: { heading: string; intro: string | null; rows: PopUpDTO[] };
@@ -1392,6 +1394,7 @@ export interface AdminHomeDTO {
   floors: (Omit<FloorDTO, 'image'> & { image: MediaDTO | null; fallback: MediaDTO | null })[];
   boutique: { heading: string | null; intro: string | null };
   accessories: { heading: string; intro: string | null };
+  lookbook: { heading: string; intro: string | null; images: MediaDTO[] };
   journal: { heading: string; intro: string; buttonLabel: string; notebook: MediaDTO | null };
   popups: { heading: string; intro: string | null; rows: PopUpDTO[] };
   footer: { blurb: string; careNote: string | null };
@@ -1412,6 +1415,7 @@ export interface SiteFileDTO {
 export const MAX_FLOORS = 8;
 export const MAX_RIBBON = 12;
 export const MAX_POPUPS = 12;
+export const MAX_LOOKBOOK = 40;
 
 const zHeading = z.string().trim().min(1, 'Required').max(80);
 const zLine = (max: number) => z.string().trim().max(max).nullish().transform((v) => v || null);
@@ -1446,6 +1450,14 @@ export const HomeInput = z.object({
     heading: zHeading,
     intro: zLine(240),
   }),
+  lookbook: z
+    .object({
+      heading: zHeading,
+      intro: zLine(240),
+      /** the photographs, in order; the shop shows its own seed set while empty */
+      imageMediaIds: z.array(zId).max(MAX_LOOKBOOK).default([]),
+    })
+    .default({ heading: 'The lookbook', intro: null, imageMediaIds: [] }),
   journal: z
     .object({
       heading: zHeading,
