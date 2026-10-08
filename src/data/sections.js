@@ -19,6 +19,7 @@ export const SECTIONS = [
   { key: 'maison',      label: 'Maison FDM',       short: 'Maison',      href: '#maison' },
   { key: 'boutique',    label: 'The boutique',     short: 'Boutique',    href: '#boutique' },
   { key: 'accessories', label: 'Accessories',      short: 'Accessories', href: '#accessories' },
+  { key: 'lookbook',    label: 'The lookbook',     short: 'Lookbook',    href: '#lookbook' },
   { key: 'journal',     label: 'Limited edition',  short: 'Edition',     href: '#journal' },
   { key: 'popups',      label: 'Where to find us', short: 'Find us',     href: '#popups' },
 ];

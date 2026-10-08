@@ -8,7 +8,7 @@ import type { AppEnv, Ctx } from '../types';
 
 export const media = new Hono<AppEnv>();
 
-const KEY = /^(products|imports-media|brand)\/[a-z0-9/_-]+\.(jpg|jpeg|png|webp|avif|gif|mp4|pdf)$/i;
+const KEY = /^(products|imports-media|brand|lookbook)\/[a-z0-9/_-]+\.(jpg|jpeg|png|webp|avif|gif|mp4|pdf)$/i;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 const headers = (contentType: string, etag?: string) => ({

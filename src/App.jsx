@@ -10,6 +10,7 @@ import Hero from './components/Hero';
 import Maison from './components/Maison';
 import Shop from './components/Shop';
 import Accessories from './components/Accessories';
+import Lookbook from './components/Lookbook';
 import Catalogue from './components/Catalogue';
 import Editorial from './components/Editorial';
 import PopUps from './components/PopUps';
@@ -29,6 +30,7 @@ const SECTION_VIEWS = {
   maison: ({ openCatalogue }) => <Maison onOpen={openCatalogue} />,
   boutique: ({ openProduct, openCatalogue }) => <Shop onOpen={openProduct} onAll={openCatalogue} />,
   accessories: ({ openProduct, openCatalogue }) => <Accessories onOpen={openProduct} onAll={openCatalogue} />,
+  lookbook: () => <Lookbook />,
   journal: ({ openProduct }) => <Editorial onOpen={openProduct} />,
   popups: () => <PopUps />,
 };
