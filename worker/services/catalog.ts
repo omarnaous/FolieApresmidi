@@ -213,6 +213,8 @@ export interface ListParams {
   sort: ProductSort;
   offset: number;
   limit: number;
+  /** The facet counts scan the whole scope; the home rails do not show them, so they ask to skip them. Default on. */
+  facets?: boolean | undefined;
 }
 
 export const encodeCursor = (offset: number) => btoa(`o:${offset}`).replace(/=+$/, '');
@@ -343,25 +345,33 @@ export async function listProducts(db: DB, p: ListParams): Promise<ProductListDT
   const listSql = `SELECT p.*, (SELECT MIN(v.price_amount) FROM variants v WHERE v.product_id = p.id) AS min_price
     FROM products p ${joins.join(' ')} WHERE ${whereSql} ORDER BY ${order} LIMIT ? OFFSET ?`;
 
-  const [list, count, optionFacets, typeFacets, priceFacet] = await d1.batch<Record<string, unknown>>([
+  // The facet counts each scan the whole scope; the home rails do not show them
+  // and ask to skip them (facets !== false keeps them for the catalogue).
+  const wantFacets = p.facets !== false;
+  const stmts = [
     d1.prepare(listSql).bind(...joinParams, ...where.params, p.limit + 1, p.offset),
     d1.prepare(`SELECT COUNT(*) AS n FROM products p WHERE ${whereSql}`).bind(...where.params),
-    d1
-      .prepare(
-        `SELECT o.name AS name, ${OPTION_VALUE} AS value, COUNT(DISTINCT p.id) AS count,
-                MIN(COALESCE((SELECT pov.position FROM product_option_values pov WHERE pov.option_id = o.id AND pov.value = ${OPTION_VALUE}), 999)) AS pos
-           FROM products p JOIN product_options o ON o.product_id = p.id JOIN variants v ON v.product_id = p.id
-          WHERE ${base.sql.join(' AND ')} AND ${OPTION_VALUE} IS NOT NULL AND ${OPTION_VALUE} != ''
-          GROUP BY lower(o.name), value ORDER BY lower(o.name), pos, value LIMIT 300`,
-      )
-      .bind(...base.params),
-    d1
-      .prepare(`SELECT p.product_type AS value, COUNT(*) AS count FROM products p WHERE ${base.sql.join(' AND ')} AND p.product_type != '' GROUP BY p.product_type ORDER BY count DESC`)
-      .bind(...base.params),
-    d1
-      .prepare(`SELECT MIN(mp) AS min, MAX(mp) AS max FROM (SELECT (SELECT MIN(v.price_amount) FROM variants v WHERE v.product_id = p.id) AS mp FROM products p WHERE ${base.sql.join(' AND ')})`)
-      .bind(...base.params),
-  ]);
+  ];
+  if (wantFacets) {
+    stmts.push(
+      d1
+        .prepare(
+          `SELECT o.name AS name, ${OPTION_VALUE} AS value, COUNT(DISTINCT p.id) AS count,
+                  MIN(COALESCE((SELECT pov.position FROM product_option_values pov WHERE pov.option_id = o.id AND pov.value = ${OPTION_VALUE}), 999)) AS pos
+             FROM products p JOIN product_options o ON o.product_id = p.id JOIN variants v ON v.product_id = p.id
+            WHERE ${base.sql.join(' AND ')} AND ${OPTION_VALUE} IS NOT NULL AND ${OPTION_VALUE} != ''
+            GROUP BY lower(o.name), value ORDER BY lower(o.name), pos, value LIMIT 300`,
+        )
+        .bind(...base.params),
+      d1
+        .prepare(`SELECT p.product_type AS value, COUNT(*) AS count FROM products p WHERE ${base.sql.join(' AND ')} AND p.product_type != '' GROUP BY p.product_type ORDER BY count DESC`)
+        .bind(...base.params),
+      d1
+        .prepare(`SELECT MIN(mp) AS min, MAX(mp) AS max FROM (SELECT (SELECT MIN(v.price_amount) FROM variants v WHERE v.product_id = p.id) AS mp FROM products p WHERE ${base.sql.join(' AND ')})`)
+        .bind(...base.params),
+    );
+  }
+  const [list, count, optionFacets, typeFacets, priceFacet] = await d1.batch<Record<string, unknown>>(stmts);
 
   const rows = (list?.results ?? []).map(rowFrom);
   const hasMore = rows.length > p.limit;
@@ -435,6 +445,41 @@ export async function availability(db: DB, product: ProductDTO, lowStockThreshol
       const available = n === null || n > 0;
       const lowStock = n !== null && n > 0 && n <= lowStockThreshold;
       return { id: v.id, available, lowStock, quantity: lowStock ? n : null };
+    }),
+  };
+}
+
+/**
+ * The stock answer for the poll, without loading the whole piece.
+ *
+ * The product page asks for this on a timer; the full product — its options,
+ * media, tags and collections — is already on screen and unchanged, so there
+ * is no reason to read it again. One join gives the variant ids, stockFor gives
+ * what is sellable, and that is all the poll needs.
+ */
+export async function availabilityByHandle(db: DB, handle: string, lowStockThreshold: number): Promise<AvailabilityDTO | null> {
+  const d1 = db.$client;
+  const rows = await d1
+    .prepare(
+      `SELECT p.id AS product_id, v.id AS variant_id
+         FROM products p LEFT JOIN variants v ON v.product_id = p.id
+        WHERE p.handle = ? AND p.status = 'active'`,
+    )
+    .bind(handle)
+    .all<{ product_id: string; variant_id: string | null }>();
+  const list = rows.results ?? [];
+  if (list.length === 0) return null; // no such active piece
+  const productId = list[0]!.product_id;
+  const variantIds = list.map((r) => r.variant_id).filter((id): id is string => !!id);
+  const stock = await stockFor(d1, variantIds, Date.now());
+  return {
+    productId,
+    variants: variantIds.map((id) => {
+      const s = stock.get(id);
+      const n = s ? sellable(s) : 0;
+      const available = n === null || n > 0;
+      const lowStock = n !== null && n > 0 && n <= lowStockThreshold;
+      return { id, available, lowStock, quantity: lowStock ? n : null };
     }),
   };
 }

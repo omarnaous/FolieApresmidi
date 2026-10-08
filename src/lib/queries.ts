@@ -29,6 +29,8 @@ export type ProductQuery = {
   available?: '1';
   sort?: ProductSort;
   limit?: number;
+  /** '0' to skip the facet counts — the home rails, which do not show them. */
+  facets?: '0';
 };
 
 export const qk = {
@@ -57,6 +59,7 @@ export const homeGridQuery = (
   collection: collection ?? undefined,
   ...(accessory === undefined ? {} : { accessory: accessory ? '1' : '0' }),
   limit: 10,
+  facets: '0', // a rail shows pieces, not facet counts
 });
 
 /* ── store & catalog ────────────────────────────────────── */
@@ -125,7 +128,7 @@ export const useProduct = (handle: string | null | undefined) =>
     enabled: !!handle,
   });
 
-/** Live stock. Never cached, re-read on focus and every 30s while the product page is open. */
+/** Live stock. Never cached, re-read on focus and once a minute while the product page is open and in front. */
 export const useAvailability = (handle: string | null | undefined, open: boolean) =>
   useQuery({
     queryKey: qk.availability(handle ?? ''),
@@ -136,7 +139,9 @@ export const useAvailability = (handle: string | null | undefined, open: boolean
     gcTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
-    refetchInterval: open ? 30_000 : false,
+    // a minute is fresh enough for stock, and a backgrounded tab stops polling
+    refetchInterval: open ? 60_000 : false,
+    refetchIntervalInBackground: false,
   });
 
 /** Shop the look under a product: the owner's pairing, or the store's suggestions. */

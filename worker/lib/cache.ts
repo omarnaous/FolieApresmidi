@@ -20,17 +20,20 @@ export const TAGS = {
 export const cacheTagHeader = (...tags: string[]) => ({ 'cache-tag': [...new Set(tags)].join(',') });
 
 /**
- * Not cached anywhere. The shop is asked afresh on every request, by the
- * browser and by the edge alike.
+ * Held at the edge for a minute, then asked afresh.
  *
- * It used to be held at the edge for five minutes and purged by tag on every
- * write. That is faster and cheaper, but a direct change to the database —
- * which is how this shop is often changed — purges nothing, so the site went
- * on serving what it had until the five minutes were up. Correct beats quick
- * at this size: a shop selling a few dozen pieces a day is nowhere near the
- * volume where the edge cache earns its confusion.
+ * The storefront is read-mostly and the same few URLs are asked for over and
+ * over; without a cache every one runs its D1 queries again, and D1's free
+ * tier counts rows read (five million a day). A short window answers the great
+ * majority from `caches.default` — see `edgeRead` in worker/middleware/core.ts
+ * — and touches the database not at all.
+ *
+ * The window is deliberately short: an admin edit (or a direct change to the
+ * database, which purges nothing) shows within a minute, with no tag purge to
+ * depend on. `stale-while-revalidate` lets the edge serve the old answer for a
+ * breath while it fetches the new one.
  */
-export const PUBLIC_CACHE = 'no-store';
+export const PUBLIC_CACHE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=600';
 
 /** The part of an execution context background work needs (Hono's and the runtime's both fit). */
 export interface BackgroundCtx {

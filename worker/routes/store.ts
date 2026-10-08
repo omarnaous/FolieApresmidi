@@ -5,7 +5,7 @@ import { notFound } from '../lib/errors';
 import { json, query } from '../lib/validate';
 import { clientIp, limit } from '../middleware/rate-limit';
 import { paymentMethods } from '../payments/registry';
-import { availability, collectionDTO, decodeCursor, listProducts, parseOptionFilters, productByHandle, shopTheLook, suggest } from '../services/catalog';
+import { availabilityByHandle, collectionDTO, decodeCursor, listProducts, parseOptionFilters, productByHandle, shopTheLook, suggest } from '../services/catalog';
 import { shipsTo } from '../services/checkout';
 import { homeDTO, readHome } from '../services/home';
 import { offerPhrase } from '../services/newsletter';
@@ -81,6 +81,8 @@ store.get('/products', query(ProductListQuery), async (c) => {
     sort: q.sort ?? (q.q ? 'relevance' : 'featured'),
     offset: decodeCursor(q.cursor),
     limit: q.limit,
+    // the home rails pass facets=0; the catalogue leaves it off and gets them
+    facets: c.req.query('facets') !== '0',
   });
   return c.json(result, 200, publicHeaders(TAGS.products, TAGS.collections));
 });
@@ -93,10 +95,10 @@ store.get('/products/:handle', async (c) => {
 
 store.get('/products/:handle/availability', async (c) => {
   const db = c.get('db');
-  const product = await productByHandle(db, c.req.param('handle'));
-  if (!product) throw notFound('That piece is not in the boutique');
   const settings = await getSettings(db);
-  return c.json(await availability(db, product, settings.lowStockThreshold), 200, { 'cache-control': 'no-store' });
+  const result = await availabilityByHandle(db, c.req.param('handle'), settings.lowStockThreshold);
+  if (!result) throw notFound('That piece is not in the boutique');
+  return c.json(result, 200, { 'cache-control': 'no-store' });
 });
 
 store.get('/products/:handle/look', async (c) => {

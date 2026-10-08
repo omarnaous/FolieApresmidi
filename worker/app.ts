@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { apiNotFound, apiSecurityHeaders, context, noStoreByDefault, onError } from './middleware/core';
+import { apiNotFound, apiSecurityHeaders, context, edgeRead, noStoreByDefault, onError } from './middleware/core';
 import { csrf } from './middleware/csrf';
 import { rateLimit } from './middleware/rate-limit';
 import { loadStaff } from './middleware/session';
@@ -38,6 +38,8 @@ import type { AppEnv } from './types';
  */
 
 const api = new Hono<AppEnv>();
+// outermost: a cache hit on a public GET is answered here, before the database
+api.use('*', edgeRead);
 api.use('*', apiSecurityHeaders, noStoreByDefault, rateLimit('RL_API'), csrf);
 api.use('*', async (c, next) => (c.req.path.startsWith('/api/admin') ? loadStaff(c, next) : next()));
 
