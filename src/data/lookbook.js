@@ -4,6 +4,6 @@
  * images on their own. Add or reorder by editing this list.
  */
 export const LOOKBOOK = Array.from(
-  { length: 20 },
+  { length: 69 },
   (_, i) => `/media/lookbook/${String(i + 1).padStart(2, '0')}.jpg`,
 );
