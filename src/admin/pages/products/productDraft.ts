@@ -50,6 +50,8 @@ export interface ProductDraft {
   collectionIds: string[];
   /** Shop the look, in order */
   look: AdminLookPieceDTO[];
+  /** look-book photographs shown on the product page, by path, in order */
+  lookbook: string[];
 }
 
 export const isColourOption = (name: string) => /^colou?r$/i.test(name.trim());
@@ -93,6 +95,7 @@ export const emptyDraft = (): ProductDraft => ({
   media: [],
   collectionIds: [],
   look: [],
+  lookbook: [],
 });
 
 export function fromDTO(p: AdminProductDTO): ProductDraft {
@@ -130,6 +133,7 @@ export function fromDTO(p: AdminProductDTO): ProductDraft {
     media: p.media,
     collectionIds: p.collections.filter((c) => c.type === 'manual').map((c) => c.id),
     look: p.look,
+    lookbook: p.lookbook ?? [],
   };
 }
 
@@ -222,6 +226,7 @@ export function buildPayload(d: ProductDraft): { payload: AdminProductInput; err
     mediaIds: d.media.map((m) => m.id),
     collectionIds: d.collectionIds,
     lookProductIds: d.look.map((p) => p.id),
+    lookbook: d.lookbook,
   };
   return { payload, errors: { ...(validate(AdminProductInput, payload) ?? {}), ...errors } };
 }

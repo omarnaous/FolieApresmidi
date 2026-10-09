@@ -5,6 +5,7 @@ import {
   BulkProductActionInput,
   InventoryAdjustInput,
   MediaUpdateInput,
+  QuickEditInput,
   type CsvImportDTO,
   type InventoryAdjustmentDTO,
   type MediaDTO,
@@ -71,6 +72,76 @@ adminProducts.get('/products', staffOnly('products:read'), query(AdminProductLis
     total: Number((count?.results?.[0] as { n?: number } | undefined)?.n ?? 0),
   };
   return c.json(body);
+});
+
+/**
+ * Price and stock, changed straight from the products list in one batch.
+ * Stock is applied as the change the list made (onHand − baseline), so a sale
+ * that came in while the list was open is kept. Setting a count on a piece
+ * that was not tracked starts tracking it. Answers the edited rows afresh.
+ */
+adminProducts.post('/products/quick-edit', staffOnly('products:write'), json(QuickEditInput), async (c) => {
+  const staff = c.get('staff')!;
+  const { items } = c.req.valid('json');
+  const d1 = c.env.DB;
+  const now = Date.now();
+
+  const ids = [...new Set(items.map((i) => i.variantId))];
+  const { results: current } = await d1
+    .prepare(`SELECT id, product_id, compare_at_amount, inventory_tracked FROM variants WHERE id IN (${ids.map(() => '?').join(',')})`)
+    .bind(...ids)
+    .all<{ id: string; product_id: string; compare_at_amount: number | null; inventory_tracked: number }>();
+  const by = new Map(current.map((v) => [v.id, v]));
+
+  const fields: Record<string, string> = {};
+  items.forEach((i, n) => {
+    const v = by.get(i.variantId);
+    if (!v) fields[`items.${n}.variantId`] = 'That piece no longer exists — reload the list';
+    else if (i.price !== undefined && v.compare_at_amount !== null && v.compare_at_amount <= i.price) {
+      fields[`items.${n}.price`] = 'Must be lower than its compare-at price — change that in the product';
+    }
+  });
+  if (Object.keys(fields).length) throw invalid(fields);
+
+  const statements: D1PreparedStatement[] = [];
+  for (const i of items) {
+    if (i.price !== undefined) {
+      statements.push(d1.prepare('UPDATE variants SET price_amount = ?, updated_at = ? WHERE id = ?').bind(i.price, now, i.variantId));
+    }
+    if (i.onHand !== undefined) {
+      if (!by.get(i.variantId)!.inventory_tracked) {
+        statements.push(d1.prepare('UPDATE variants SET inventory_tracked = 1, updated_at = ? WHERE id = ?').bind(now, i.variantId));
+      }
+      statements.push(...adjustStatements(d1, i.variantId, i.onHand - (i.baseline ?? 0), { reason: 'manual', staffId: staff.id, note: null, now }));
+    }
+  }
+  const productIds = [...new Set(items.map((i) => by.get(i.variantId)!.product_id))];
+  statements.push(d1.prepare(`UPDATE products SET updated_at = ? WHERE id IN (${productIds.map(() => '?').join(',')})`).bind(now, ...productIds));
+
+  try {
+    await d1.batch(statements);
+  } catch (err) {
+    if (constraintName(err) === 'variants_stock') throw invalid({ items: 'That would put a piece below zero — reload and try again' });
+    throw err;
+  }
+
+  // a smart collection can hold pieces by price
+  if (items.some((i) => i.price !== undefined)) await rematerializeForProducts(d1, productIds);
+  purgeProducts(c.executionCtx, productIds);
+  await audit(
+    c,
+    'product.quick_edit',
+    'product',
+    productIds.length === 1 ? productIds[0]! : null,
+    `Price/stock edited on ${productIds.length} product${productIds.length === 1 ? '' : 's'} from the list`,
+    { variants: items.length },
+  );
+
+  const { results } = await d1
+    .prepare(`${LIST_SELECT} WHERE p.id IN (${productIds.map(() => '?').join(',')})`)
+    .bind(...productIds)
+    .all<Record<string, unknown>>();
+  return c.json({ items: await adminProductListItems(d1, results) });
 });
 
 adminProducts.post('/products', staffOnly('products:write'), json(AdminProductInput), async (c) => {

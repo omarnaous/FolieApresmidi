@@ -1,4 +1,13 @@
-import type { AdminLookPieceDTO, AdminProductDTO, AdminProductInput, AdminProductListItemDTO, AdminVariantDTO, MediaDTO, ProductOptionDTO } from '../../shared/api';
+import type {
+  AdminListVariantDTO,
+  AdminLookPieceDTO,
+  AdminProductDTO,
+  AdminProductInput,
+  AdminProductListItemDTO,
+  AdminVariantDTO,
+  MediaDTO,
+  ProductOptionDTO,
+} from '../../shared/api';
 import type { z } from 'zod';
 import type { AdminProductInput as AdminProductInputSchema } from '../../shared/api';
 import { constraintName, invalid, notFound } from '../lib/errors';
@@ -192,6 +201,14 @@ export async function saveProductCore(d1: D1Database, id: string | null, input: 
     );
   }
 
+  // the look-book photographs paired with the piece; left out, kept as they were
+  if (input.lookbook) {
+    statements.push(d1.prepare('DELETE FROM product_lookbook WHERE product_id = ?').bind(productId));
+    input.lookbook.forEach((url, i) =>
+      statements.push(d1.prepare('INSERT INTO product_lookbook (product_id, url, position) VALUES (?, ?, ?)').bind(productId, url, i)),
+    );
+  }
+
   statements.push(...reindexStatements(d1, [productId]));
 
   try {
@@ -212,7 +229,7 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
   const p = await d1.prepare('SELECT * FROM products WHERE id = ?').bind(id).first<Record<string, unknown>>();
   if (!p) throw notFound('Product not found');
   const now = Date.now();
-  const [options, values, variants, media, tags, collections, reserved, look] = await d1.batch<Record<string, unknown>>([
+  const [options, values, variants, media, tags, collections, reserved, look, lookbook] = await d1.batch<Record<string, unknown>>([
     d1.prepare('SELECT * FROM product_options WHERE product_id = ? ORDER BY position').bind(id),
     d1.prepare('SELECT v.* FROM product_option_values v JOIN product_options o ON o.id = v.option_id WHERE o.product_id = ? ORDER BY v.position').bind(id),
     d1.prepare('SELECT * FROM variants WHERE product_id = ? ORDER BY position').bind(id),
@@ -230,6 +247,7 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
           WHERE l.product_id = ? ORDER BY l.position`,
       )
       .bind(id),
+    d1.prepare('SELECT url FROM product_lookbook WHERE product_id = ? ORDER BY position').bind(id),
   ]);
 
   const optionRows = (options?.results ?? []) as { id: string; name: string }[];
@@ -280,6 +298,7 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
     ),
     collections: ((collections?.results ?? []) as { id: string; title: string; type: 'manual' | 'smart' }[]).map((c) => ({ id: c.id, title: c.title, type: c.type })),
     look: lookRows.map((r) => ({ id: r.id, handle: r.handle, title: r.title, status: r.status, image: r.media_id ? lookMedia.get(r.media_id) ?? null : null })),
+    lookbook: ((lookbook?.results ?? []) as { url: string }[]).map((r) => r.url),
     publishedAt: (p.published_at as number | null) ?? null,
     createdAt: p.created_at as number,
     updatedAt: p.updated_at as number,
@@ -289,7 +308,31 @@ export async function adminProductDTO(d1: D1Database, id: string): Promise<Admin
 export async function adminProductListItems(d1: D1Database, rows: Record<string, unknown>[]): Promise<AdminProductListItemDTO[]> {
   const mediaIds = rows.map((r) => (r.media_id as string | null) ?? '').filter(Boolean);
   const media = await mediaByIdsRaw(d1, mediaIds);
+  // each row's variants, in one query a page, so the list can edit price and stock in place
+  const variants = new Map<string, AdminListVariantDTO[]>();
+  for (const part of chunk(rows.map((r) => r.id as string))) {
+    const { results } = await d1
+      .prepare(
+        `SELECT id, product_id, title, price_amount, compare_at_amount, inventory_on_hand, inventory_tracked
+           FROM variants WHERE product_id IN (${part.map(() => '?').join(',')}) ORDER BY product_id, position`,
+      )
+      .bind(...part)
+      .all<{ id: string; product_id: string; title: string; price_amount: number; compare_at_amount: number | null; inventory_on_hand: number; inventory_tracked: number }>();
+    for (const v of results) {
+      const list = variants.get(v.product_id) ?? [];
+      list.push({
+        id: v.id,
+        title: v.title,
+        price: v.price_amount,
+        compareAtPrice: v.compare_at_amount,
+        inventoryOnHand: v.inventory_on_hand,
+        inventoryTracked: !!v.inventory_tracked,
+      });
+      variants.set(v.product_id, list);
+    }
+  }
   return rows.map((r) => ({
+    variants: variants.get(r.id as string) ?? [],
     id: r.id as string,
     handle: r.handle as string,
     title: r.title as string,
@@ -319,6 +362,7 @@ export function deleteProductStatements(d1: D1Database, ids: string[]): D1Prepar
       `DELETE FROM collection_products WHERE product_id IN (${marks})`,
       `DELETE FROM product_looks WHERE product_id IN (${marks})`,
       `DELETE FROM product_looks WHERE look_product_id IN (${marks})`,
+      `DELETE FROM product_lookbook WHERE product_id IN (${marks})`,
       `DELETE FROM wishlist_items WHERE product_id IN (${marks})`,
       `DELETE FROM products_fts WHERE product_id IN (${marks})`,
       `DELETE FROM products WHERE id IN (${marks})`,

@@ -390,6 +390,18 @@
 .adm .adm-stockinput { width: 92px; margin-left: auto; }
 .adm .adm-stockinput input { text-align: right; }
 
+/* Price and stock typed straight into the products list. */
+.adm .adm-qe { display: flex; align-items: center; gap: 6px; cursor: default; }
+.adm .adm-qe--price { justify-content: flex-end; flex-direction: column; align-items: flex-end; gap: 2px; }
+.adm .adm-qe--stock { flex-wrap: wrap; gap: 6px 10px; }
+.adm .adm-qe__size { display: inline-flex; align-items: center; gap: 4px; }
+.adm .adm-qe__label { font-size: 11px; color: var(--adm-muted, #6b6b6b); letter-spacing: 0.02em; }
+.adm .adm-qe__stock { width: 64px; margin: 0; }
+.adm .adm-qe__stock input { text-align: right; }
+.adm .adm-qe__price { width: 116px; margin: 0; }
+.adm .adm-qe__price input { text-align: right; }
+.adm .adm-qe__hint { font-size: 11px; color: var(--adm-muted, #6b6b6b); }
+
 /* ── Dashboard ── */
 .adm .adm-kpis,
 .adm .adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 1px; background: var(--ink-14); border: 1px solid var(--ink-14); margin-bottom: 20px; }
@@ -483,6 +495,20 @@
 .adm .adm-libgrid__item { display: block; width: 100%; aspect-ratio: 1; overflow: hidden; border: 1px solid var(--ink-07); background: #e0d7cb; }
 .adm .adm-libgrid__item img { width: 100%; height: 100%; object-fit: cover; }
 .adm .adm-libgrid__item:hover { outline: 2px solid var(--terra); outline-offset: -2px; }
+
+/* the look-book picker: portrait plates, ticked ones ringed and numbered */
+.adm .adm-lbpick { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.adm .adm-lbpick__item { position: relative; aspect-ratio: 4 / 5; padding: 0; cursor: pointer; }
+.adm .adm-lbpick__item.is-on { outline: 3px solid var(--terra); outline-offset: -3px; }
+.adm .adm-lbpick__item.is-taken { opacity: 0.45; cursor: default; }
+.adm .adm-lbpick__item:disabled:not(.is-taken) { opacity: 0.6; cursor: not-allowed; }
+.adm .adm-lbpick__tick {
+  position: absolute; top: 6px; right: 6px;
+  min-width: 22px; height: 22px; padding: 0 6px;
+  display: grid; place-items: center;
+  border-radius: 999px; background: var(--terra); color: #fff;
+  font-size: 12px; font-weight: 600;
+}
 .adm .adm-singleimg { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .adm .adm-singleimg img { width: 100%; max-height: 220px; object-fit: cover; border: 1px solid var(--ink-07); }
 .adm .adm-singleimg__empty { width: 100% !important; height: 110px !important; }

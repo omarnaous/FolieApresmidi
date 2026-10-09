@@ -340,6 +340,8 @@ export interface ProductDTO {
   collections: { handle: string; title: string }[];
   seo: { title: string; description: string };
   createdAt: Timestamp;
+  /** look-book photographs the owner paired with the piece, in order — on the product page only */
+  lookbook?: string[];
 }
 
 /** GET /api/products/:handle/availability — never cached. */
@@ -791,6 +793,17 @@ export interface AdminProductListItemDTO {
   priceMin: Money;
   priceMax: Money;
   updatedAt: Timestamp;
+  /** every variant, so price and stock can be changed straight from the list */
+  variants: AdminListVariantDTO[];
+}
+
+export interface AdminListVariantDTO {
+  id: string;
+  title: string;
+  price: Money;
+  compareAtPrice: Money | null;
+  inventoryOnHand: number;
+  inventoryTracked: boolean;
 }
 
 export const AdminProductListQuery = z.object({
@@ -826,6 +839,15 @@ export const AdminVariantInput = z.object({
 
 /** How many pieces a product's "Shop the look" can hold. */
 export const LOOK_MAX = 8;
+/** How many look-book photographs a product can be paired with. */
+export const LOOKBOOK_LINK_MAX = 12;
+/**
+ * A look-book photograph, by its own path on this shop — never an outside URL,
+ * so nothing but the house's images can end up on a product page.
+ */
+export const zLookbookUrl = z
+  .string()
+  .regex(/^\/media\/(lookbook|products|imports-media)\/[a-z0-9/_-]+\.(jpe?g|png|webp|avif)$/i, 'Not a look-book image');
 
 export const AdminProductInput = z
   .object({
@@ -858,10 +880,15 @@ export const AdminProductInput = z
      * (a CSV import), the pairing already saved is kept as it is.
      */
     lookProductIds: z.array(zId).max(LOOK_MAX, `Choose at most ${LOOK_MAX} pieces`).optional(),
+    /** look-book photographs shown on the product page, in order. Left out, the saved ones are kept. */
+    lookbook: z.array(zLookbookUrl).max(LOOKBOOK_LINK_MAX, `Choose at most ${LOOKBOOK_LINK_MAX} photographs`).optional(),
   })
   .superRefine((p, ctx) => {
     if (p.lookProductIds && new Set(p.lookProductIds).size !== p.lookProductIds.length) {
       ctx.addIssue({ code: 'custom', path: ['lookProductIds'], message: 'A piece is in the look twice' });
+    }
+    if (p.lookbook && new Set(p.lookbook).size !== p.lookbook.length) {
+      ctx.addIssue({ code: 'custom', path: ['lookbook'], message: 'A photograph is chosen twice' });
     }
     const seen = new Set<string>();
     p.variants.forEach((v, i) => {
@@ -915,6 +942,8 @@ export interface AdminProductDTO {
   collections: { id: string; title: string; type: 'manual' | 'smart' }[];
   /** Shop the look, in order — every paired piece, including ones not on sale */
   look: AdminLookPieceDTO[];
+  /** look-book photographs paired with the piece, in order */
+  lookbook: string[];
   publishedAt: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -978,6 +1007,29 @@ export const InventorySetInput = z.object({
     .max(200),
 });
 export type InventorySetInput = z.input<typeof InventorySetInput>;
+
+/**
+ * POST /api/admin/products/quick-edit — price and stock changed straight from
+ * the products list, in one batch. Stock carries the count the list showed
+ * (baseline), so a sale made while it was open is not overwritten.
+ */
+export const QuickEditInput = z.object({
+  items: z
+    .array(
+      z
+        .object({
+          variantId: zId,
+          price: zMoney.optional(),
+          onHand: z.number().int().min(0).max(1_000_000).optional(),
+          baseline: z.number().int().min(-1_000_000).max(1_000_000).optional(),
+        })
+        .refine((i) => i.price !== undefined || i.onHand !== undefined, 'Nothing to change')
+        .refine((i) => i.onHand === undefined || i.baseline !== undefined, { message: 'Missing baseline', path: ['baseline'] }),
+    )
+    .min(1, 'Nothing to save')
+    .max(500),
+});
+export type QuickEditInput = z.input<typeof QuickEditInput>;
 
 export interface InventoryAdjustmentDTO {
   id: string;

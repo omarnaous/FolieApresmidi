@@ -178,7 +178,14 @@ export async function productByHandle(db: DB, handle: string, opts: { includeDra
     .first<Record<string, unknown>>();
   if (!row) return null;
   const [dto] = await productDTOs(db, [rowFrom(row)]);
-  return dto ?? null;
+  if (!dto) return null;
+  // the look-book photographs paired with the piece — the product page only
+  const { results } = await db.$client
+    .prepare('SELECT url FROM product_lookbook WHERE product_id = ? ORDER BY position')
+    .bind(dto.id)
+    .all<{ url: string }>();
+  dto.lookbook = results.map((r) => r.url);
+  return dto;
 }
 
 /* ─────────────────────────── search & listing ─────────────────────────── */

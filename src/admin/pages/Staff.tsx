@@ -269,7 +269,8 @@ function InviteModal({ onClose }: { onClose: () => void }) {
         <div className="adm-stack">
           <Banner tone="info">
             <p>
-              Email delivery is in development mode, so share this link with {result.staff.name} directly. It works once and expires.
+              An invitation was emailed to {result.staff.email}. If it doesn’t arrive, send {result.staff.name} this link directly — they open it, choose
+              their own password, and they’re in. It works once and expires in 7 days.
             </p>
           </Banner>
           <div className="adm-inviteurl">

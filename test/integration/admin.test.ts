@@ -196,6 +196,38 @@ describe('admin catalog', () => {
     expect((await owner.json<AdminProductDTO>('GET', `/api/admin/products/${dress.id}`)).data.look.map((p) => p.title)).toEqual(['Look jacket']);
   });
 
+  it('pairs look-book photographs with a piece, shows them on its page, and refuses outside images', async () => {
+    const coat = await createProduct({ title: 'Look-book coat' });
+    const body = (lookbook?: string[]) => ({
+      title: coat.title,
+      handle: coat.handle,
+      status: 'active',
+      productType: coat.productType,
+      options: coat.options.map((o) => ({ name: o.name, values: o.values.map((v) => ({ value: v.value })) })),
+      variants: coat.variants.map((v) => ({ id: v.id, options: v.options, price: v.price, inventoryOnHand: v.inventoryOnHand })),
+      lookbook,
+    });
+    const put = (lookbook?: string[]) => owner.json<AdminProductDTO>('PUT', `/api/admin/products/${coat.id}`, body(lookbook));
+
+    const saved = await put(['/media/lookbook/07.jpg', '/media/lookbook/03.jpg']);
+    expect(saved.status).toBe(200);
+    expect(saved.data.lookbook).toEqual(['/media/lookbook/07.jpg', '/media/lookbook/03.jpg']);
+
+    // the product page carries them, in order
+    const page = await new Shopper().json<{ lookbook?: string[] }>('GET', `/api/products/${coat.handle}`);
+    expect(page.data.lookbook).toEqual(['/media/lookbook/07.jpg', '/media/lookbook/03.jpg']);
+
+    // only the shop's own images, each once
+    for (const bad of [['https://evil.example/x.jpg'], ['/media/lookbook/../../x.jpg'], ['javascript:alert(1)'], ['/media/lookbook/01.jpg', '/media/lookbook/01.jpg']]) {
+      const refused = await owner.json('PUT', `/api/admin/products/${coat.id}`, body(bad));
+      expect(refused.status).toBe(422);
+    }
+
+    // left out, kept; emptied, cleared
+    expect((await put(undefined)).data.lookbook).toHaveLength(2);
+    expect((await put([])).data.lookbook).toEqual([]);
+  });
+
   it('rejects invalid variants with field errors', async () => {
     const res = await owner.json('POST', '/api/admin/products', {
       title: 'Broken',
@@ -505,6 +537,61 @@ describe('inventory', () => {
   it('is only for staff who manage products', async () => {
     expect((await new Shopper().json('GET', '/api/admin/inventory')).status).toBe(401);
     expect((await new Shopper().json('POST', '/api/admin/inventory', { items: [] })).status).toBe(401);
+  });
+});
+
+describe('quick edit from the products list', () => {
+  type Row = { id: string; priceMin: number; priceMax: number; inventoryTotal: number; variants: { id: string; price: number; inventoryOnHand: number; inventoryTracked: boolean }[] };
+  const quick = (items: unknown[]) => owner.json<{ items: Row[] }>('POST', '/api/admin/products/quick-edit', { items });
+
+  it('lists each piece with its sizes, and changes price and stock in place', async () => {
+    const product = await createProduct({ title: 'Quick piece', stock: [3, 1] });
+    const [small, medium] = product.variants;
+
+    const list = await owner.json<Page<Row>>('GET', '/api/admin/products?q=Quick%20piece');
+    expect(list.data.items[0]!.variants.map((v) => [v.price, v.inventoryOnHand])).toEqual([
+      [10_000, 3],
+      [10_000, 1],
+    ]);
+
+    const saved = await quick([
+      { variantId: small!.id, price: 12_500 },
+      { variantId: medium!.id, price: 12_500, onHand: 4, baseline: 1 },
+    ]);
+    expect(saved.status).toBe(200);
+    expect(saved.data.items[0]).toMatchObject({ priceMin: 12_500, priceMax: 12_500, inventoryTotal: 7 });
+    expect((await new Shopper().json<{ price: number }>('GET', `/api/products/${product.handle}`)).data.price).toBe(12_500);
+
+    // a sale while the list was open is kept: only the change typed is applied
+    await owner.json('POST', `/api/admin/variants/${small!.id}/inventory`, { mode: 'adjust', quantity: -1 });
+    await quick([{ variantId: small!.id, onHand: 5, baseline: 3 }]);
+    expect(await stockOf(small!.id)).toBe(4);
+
+    // never below zero
+    expect((await quick([{ variantId: small!.id, onHand: 0, baseline: 100 }])).status).toBe(422);
+    expect(await stockOf(small!.id)).toBe(4);
+  });
+
+  it('starts counting a piece that was not tracked once a number is typed', async () => {
+    const product = await createProduct({ title: 'Untracked piece', stock: [0, 0] });
+    const id = product.variants[0]!.id;
+    await env.DB.prepare('UPDATE variants SET inventory_tracked = 0 WHERE id = ?').bind(id).run();
+
+    const saved = await quick([{ variantId: id, onHand: 2, baseline: 0 }]);
+    expect(saved.status).toBe(200);
+    expect(saved.data.items[0]!.variants.find((v) => v.id === id)).toMatchObject({ inventoryTracked: true, inventoryOnHand: 2 });
+  });
+
+  it('refuses a price at or over the compare-at price, and strangers', async () => {
+    const product = await createProduct({ title: 'Sale piece' });
+    const id = product.variants[0]!.id;
+    await env.DB.prepare('UPDATE variants SET compare_at_amount = 15000 WHERE id = ?').bind(id).run();
+
+    const refused = await quick([{ variantId: id, price: 15_000 }]);
+    expect(refused.status).toBe(422);
+    expect(Object.keys((refused.data as unknown as { error: { fields: Record<string, string> } }).error.fields)).toContain('items.0.price');
+
+    expect((await new Shopper().json('POST', '/api/admin/products/quick-edit', { items: [{ variantId: id, price: 1 }] })).status).toBe(401);
   });
 });
 

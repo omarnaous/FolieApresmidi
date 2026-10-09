@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { imageSrc } from '../../shared/api';
 import { useCart } from '../store/cart';
 import ShopTheLook from './ShopTheLook';
+import ProductLookbook from './ProductLookbook';
 import SizeChart, { hasSizeChart } from './SizeChart';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 import { useEscape, useLinger, useSheetFocus } from '../hooks/useSheet';
@@ -464,6 +465,8 @@ export default function ProductPage({ handle, onClose, onOpen }) {
       {look?.items.length > 0 && (
         <ShopTheLook key={p.id} product={p} items={look.items} curated={look.curated} onOpen={onOpen} />
       )}
+
+      {p.lookbook?.length > 0 && <ProductLookbook key={`lb-${p.id}`} product={p} urls={p.lookbook} />}
 
       {/* Phone only: the price and the button stay in reach at any scroll depth. */}
       <div className="pdp-dock">

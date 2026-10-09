@@ -68,10 +68,12 @@ adminStaff.post('/staff/invite', staffOnly('staff:manage'), json(StaffInviteInpu
   const body: StaffInviteResultDTO = {
     staff: staffDTO(row),
     /* The link is a live credential — whoever holds it sets the password and
-       is signed in. It goes back over the wire in development only, where
-       there is no mail provider to carry it. A deployed shop with no mail
-       configured shows nothing rather than handing the token to the caller. */
-    inviteUrl: c.env.APP_ENV === 'development' ? url : null,
+       is signed in. It goes back over the wire to the owner (who could invite
+       an address of their own anyway, so it grants them nothing new) as a
+       fallback for when the email does not arrive, and to anyone in
+       development, where there is no mail provider to carry it. Admins and
+       staff who invite get the email only. */
+    inviteUrl: actor.role === 'owner' || c.env.APP_ENV === 'development' ? url : null,
   };
   return c.json(body, 201);
 });

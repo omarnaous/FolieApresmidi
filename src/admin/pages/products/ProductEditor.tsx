@@ -18,6 +18,7 @@ import { ConfirmDialog } from '../../ui/Modal';
 import { SeoCard } from '../../ui/SeoCard';
 import { useToast } from '../../ui/Toasts';
 import { LookCard } from './LookCard';
+import { LookbookCard } from './LookbookCard';
 import { MediaCard } from './MediaCard';
 import { OptionsCard } from './OptionsCard';
 import { buildPayload, emptyDraft, fromDTO, syncVariants, type OptionDraft, type ProductDraft } from './productDraft';
@@ -173,6 +174,7 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
             <VariantsCard variants={draft.variants} media={draft.media} currency={currency} errors={errors} onChange={(variants) => set('variants', variants)} />
 
             <LookCard pieces={draft.look} productId={product?.id ?? null} error={errors.lookProductIds} onChange={(look) => set('look', look)} />
+            <LookbookCard urls={draft.lookbook} error={errors.lookbook} onChange={(lookbook) => set('lookbook', lookbook)} />
           </div>
 
           <div className="adm-split__side">
