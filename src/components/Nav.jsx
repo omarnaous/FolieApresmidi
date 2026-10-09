@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useCart } from '../store/cart';
 import { useSections } from '../data/sections';
+import { useStore } from '../lib/queries';
 
 /* Thin, quiet line icons — the house's own weight, drawn to sit either side
    of the mark without shouting. */
@@ -39,7 +41,13 @@ const IconBag = () => (
 export default function Nav({ onMenu, menuOpen, onSearch, page }) {
   const { count, openCart } = useCart();
   const sections = useSections();
+  const navigate = useNavigate();
+  const { data: store } = useStore();
   const [scrolled, setScrolled] = useState(false);
+
+  // the collections, in the owner's saved order — shown in the Boutique pop-up
+  const collections = (store?.menu ?? []).filter((m) => m.collectionHandle);
+  const toCollection = (handle) => (e) => { e.preventDefault(); navigate(`/collections/${handle}`); };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > window.innerHeight * 0.9);
@@ -57,9 +65,30 @@ export default function Nav({ onMenu, menuOpen, onSearch, page }) {
         </button>
         {/* desk: the sections, spelled out */}
         <nav className="nav-links" aria-label="Primary">
-          {sections.map((s) => (
-            <a key={s.href} className="label link-u" href={s.href}>{s.short}</a>
-          ))}
+          {sections.map((s) =>
+            s.key === 'boutique' && collections.length ? (
+              // the boutique opens a pop-up of the collections, in the saved order
+              <span key={s.href} className="nav-drop">
+                <a className="label link-u" href={s.href} aria-haspopup="true">{s.short}</a>
+                <span className="nav-drop-panel" role="menu" aria-label="Collections">
+                  <a className="nav-drop-item" href="/collections/all" onClick={toCollection('all')} role="menuitem">All pieces</a>
+                  {collections.map((c) => (
+                    <a
+                      key={c.collectionHandle}
+                      className="nav-drop-item"
+                      href={`/collections/${c.collectionHandle}`}
+                      onClick={toCollection(c.collectionHandle)}
+                      role="menuitem"
+                    >
+                      {c.label}
+                    </a>
+                  ))}
+                </span>
+              </span>
+            ) : (
+              <a key={s.href} className="label link-u" href={s.href}>{s.short}</a>
+            ),
+          )}
         </nav>
         {/* phone: search sits by the menu */}
         <button className="nav-ico nav-search-m" onClick={onSearch} aria-label="Search all pieces">

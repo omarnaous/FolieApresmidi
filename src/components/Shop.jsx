@@ -21,29 +21,27 @@ import { homeGridQuery, useCollection, usePrefetchProductList, useStore } from '
 export default function Shop({ onOpen, onAll }) {
   const eyebrow = useEyebrow('#boutique');
   const { data: store } = useStore();
-  const featured = useCollection(store?.featuredCollectionHandle);
   const prefetch = usePrefetchProductList();
 
-  // the owner's own title wins; with none, the drop names the section
-  const copy = store?.home?.boutique;
-  const heading = copy?.heading || ((store?.featuredCollectionHandle && !featured.isError ? featured.data?.title : store?.name) ?? ' ');
-
   // every collection on the menu becomes a tab here, the way the catalogue
-  // has them, so each drop's name shows on the home page and a shopper can
-  // move between them. The featured drop leads and is what opens first.
-  const drop = store?.featuredCollectionHandle ?? null;
-  const tabs = useMemo(() => {
-    const rows = (store?.menu ?? [])
-      .filter((m) => m.collectionHandle)
-      .map((m) => ({ value: m.collectionHandle, label: m.label }));
-    if (featured.data && !rows.some((t) => t.value === featured.data.handle)) {
-      rows.unshift({ value: featured.data.handle, label: featured.data.title });
-    }
-    return rows;
-  }, [store?.menu, featured.data]);
+  // has them, in the owner's saved order (Collections → reorder). A shopper
+  // can move between them.
+  const tabs = useMemo(
+    () => (store?.menu ?? []).filter((m) => m.collectionHandle).map((m) => ({ value: m.collectionHandle, label: m.label })),
+    [store?.menu],
+  );
+  // the shelf opens on the FIRST collection in that saved order — so dragging a
+  // collection to the top in the admin changes which drop leads here, not only
+  // the tab strip. With no menu set, the featured collection stands in.
+  const drop = tabs[0]?.value ?? store?.featuredCollectionHandle ?? null;
+  const lead = useCollection(drop);
+
+  // the owner's own title wins; with none, the leading drop names the section
+  const copy = store?.home?.boutique;
+  const heading = copy?.heading || ((drop && !lead.isError ? lead.data?.title : store?.name) ?? ' ');
 
   const [active, setActive] = useState(null);
-  // follow the featured drop; a shopper's own tab pick is left alone
+  // follow the leading drop; a shopper's own tab pick is left alone
   useEffect(() => { setActive(drop); }, [drop]);
 
   return (
