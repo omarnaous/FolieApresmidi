@@ -19,6 +19,7 @@ import type {
 } from '../../shared/api';
 import { formatMoney } from '../../shared/money';
 import { get } from './api';
+import { catalogVersion } from './sync';
 
 /* ── keys ───────────────────────────────────────────────── */
 
@@ -73,9 +74,12 @@ export const homeGridQuery = (
 export const useStore = () =>
   useQuery({
     queryKey: qk.store,
-    queryFn: ({ signal }) => get<StoreDTO>('/api/store', undefined, signal),
+    // after a save in an admin tab, past the edge's copy to the Worker itself
+    queryFn: ({ signal }) => get<StoreDTO>(`/api/store${catalogVersion()}`, undefined, signal),
     staleTime: 60_000,
-    refetchOnWindowFocus: true,
+    // back on this tab: always ask again — the menu, the collections' order and
+    // the home copy may have just been changed in the admin in another tab
+    refetchOnWindowFocus: 'always',
   });
 
 /** Formats minor units in the store's currency (USD until the store has loaded). */

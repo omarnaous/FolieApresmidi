@@ -62,7 +62,11 @@ store.get('/store', async (c) => {
     sizeChart: readSizeChart(s.sizeChartJson),
     newsletterOffer: await offerPhrase(c.env.DB, s.newsletterWelcomeCode, s.currency),
   };
-  return c.json(body, 200, publicHeaders(TAGS.collections));
+  /* The store answer carries the collections' order and the home page copy —
+     what the owner changes most and checks at once. Its edge window is ten
+     seconds, so even a purge that never lands shows the change almost at once;
+     it is one request a visit, so the short window costs next to nothing. */
+  return c.json(body, 200, { ...publicCacheHeaders(10), ...cacheTagHeader(TAGS.catalog, TAGS.collections) });
 });
 
 store.get('/products', query(ProductListQuery), async (c) => {

@@ -6,13 +6,22 @@
  * A 4xx is an answer, not a hiccup, so only network and server failures are
  * retried, and only once.
  */
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
 import type { CollectionDTO, ProductDTO } from '../../shared/api';
 import { ApiError } from './api';
 import { qk } from './queries';
+import { announceCatalogChange } from './sync';
+
+const inAdmin = () => typeof location !== 'undefined' && location.pathname.startsWith('/admin');
 
 export function createQueryClient(): QueryClient {
   return new QueryClient({
+    // every save made in the admin tells the shop's open tabs to fetch afresh
+    mutationCache: new MutationCache({
+      onSuccess: () => {
+        if (inAdmin()) announceCatalogChange();
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30_000,

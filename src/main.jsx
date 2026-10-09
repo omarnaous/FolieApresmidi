@@ -6,12 +6,18 @@ import './styles.css';
 import App from './App';
 import { CartProvider } from './store/cart';
 import { createQueryClient, seedInitialData } from './lib/queryClient';
+import { onCatalogChange } from './lib/sync';
 
 // The admin is its own chunk and its own app — no preloader, cursor or Lenis.
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 
 const queryClient = createQueryClient();
 seedInitialData(queryClient);
+
+// a save in an admin tab beside this one: the shop fetches everything afresh
+onCatalogChange(() => {
+  if (!location.pathname.startsWith('/admin')) void queryClient.invalidateQueries();
+});
 
 // Any server-rendered snapshot inside #root is simply replaced on mount.
 createRoot(document.getElementById('root')).render(
