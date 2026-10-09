@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
-import { patch, put, type AdminCollectionDTO, type StoreDTO } from '../../lib/contract';
+import { patch, put, type AdminCollectionDTO } from '../../lib/contract';
 import { fmtDate } from '../../lib/format';
 import { useUnsavedChanges } from '../../lib/hooks';
 import { moveItem } from '../../lib/util';
-import { qk, useCollections, useStore } from '../../lib/queries';
+import { qk, useCollections } from '../../lib/queries';
 import { useCan } from '../../lib/session';
 import { ButtonLink } from '../../ui/Button';
 import { EmptyState, ErrorBanner, QueryState } from '../../ui/feedback';
@@ -24,37 +24,26 @@ export default function CollectionsList() {
   const can = useCan();
   const canWrite = can('products:write');
   const q = useCollections();
-  const store = useStore();
   const [search, setSearch] = useState('');
 
-  const menuOrder = useMemo(
-    () => new Map((store.data?.menu ?? []).flatMap((m, i) => (m.collectionHandle ? [[m.collectionHandle, i] as const] : []))),
-    [store.data],
-  );
-  const saved = useMemo(
-    () =>
-      [...(q.data ?? [])].sort(
-        (a, b) =>
-          Number(b.published) - Number(a.published) ||
-          (menuOrder.get(a.handle) ?? 999) - (menuOrder.get(b.handle) ?? 999) ||
-          a.title.localeCompare(b.title),
-      ),
-    [q.data, menuOrder],
-  );
+  /* The server answers in the saved shop order (available ones as arranged,
+     then the ones off the shop), straight from the database. */
+  const saved = useMemo(() => q.data ?? [], [q.data]);
 
-  /* The order on screen. Moves stay here until Save; a refresh of the saved
-     order only replaces it while nothing is waiting to be saved. */
-  const [order, setOrder] = useState(saved);
+  /* The owner's moves, as the order of the available collections — null when
+     nothing has been moved. Kept apart from the data, so a refetch can never
+     be mistaken for a move or undo one. */
+  const [edited, setEdited] = useState<string[] | null>(null);
+  const order = useMemo(() => {
+    if (!edited) return saved;
+    const by = new Map(saved.map((c) => [c.handle, c]));
+    const moved = edited.map((h) => by.get(h)).filter((c): c is AdminCollectionDTO => !!c && c.published);
+    const added = saved.filter((c) => c.published && !edited.includes(c.handle));
+    return [...moved, ...added, ...saved.filter((c) => !c.published)];
+  }, [saved, edited]);
   const savedLive = saved.filter((c) => c.published).map((c) => c.handle);
   const orderLive = order.filter((c) => c.published).map((c) => c.handle);
-  const dirty = savedLive.join('|') !== orderLive.join('|');
-  useEffect(() => {
-    if (!dirty) return setOrder(saved);
-    // a move is waiting: keep its order, but take each collection's fresh state (a switch flipped meanwhile)
-    const fresh = new Map(saved.map((c) => [c.handle, c]));
-    setOrder((o) => o.map((c) => fresh.get(c.handle) ?? c));
-    // only when the saved order itself changes
-  }, [saved]);
+  const dirty = edited !== null && savedLive.join('|') !== orderLive.join('|');
   useUnsavedChanges(dirty);
   const [dragging, setDragging] = useState<string | null>(null);
   /** the row the carried one is hovering, so the line shows where it lands */
@@ -71,15 +60,23 @@ export default function CollectionsList() {
   const reorder = useMutation({
     mutationFn: (handles: string[]) => put<void>('/api/admin/collections/order', { handles }),
     onSuccess: (_, handles) => {
-      // the shop's menu, as just saved — so the list does not wait on a refetch to agree
-      qc.setQueryData<StoreDTO>(qk.store, (old) =>
-        old ? { ...old, menu: [...old.menu.filter((m) => !m.collectionHandle), ...handles.map((h) => ({ label: order.find((c) => c.handle === h)?.title ?? h, collectionHandle: h }))] } : old,
+      // the list, in exactly the order just saved, before the move is let go
+      const at = new Map(handles.map((h, i) => [h, i]));
+      qc.setQueryData<{ items: AdminCollectionDTO[] }>(qk.collections, (old) =>
+        old
+          ? {
+              items: [...old.items].sort(
+                (a, b) =>
+                  Number(b.published) - Number(a.published) ||
+                  (at.get(a.handle) ?? 999) - (at.get(b.handle) ?? 999) ||
+                  a.title.localeCompare(b.title),
+              ),
+            }
+          : old,
       );
+      setEdited(null);
       toast.success('Collection order saved');
-      // the menu above is exactly what was saved; asking the shop for it again
-      // could only bring back a cached copy, so only the collections refresh
-      void qc.invalidateQueries({ queryKey: qk.collections });
-      void qc.invalidateQueries({ queryKey: qk.publicCollections });
+      refresh();
     },
   });
 
@@ -99,8 +96,7 @@ export default function CollectionsList() {
 
   const move = (from: number, to: number) => {
     if (to < 0 || to >= live.length || from === to) return;
-    const next = moveItem(live, from, to);
-    setOrder([...next, ...order.filter((c) => !c.published)]);
+    setEdited(moveItem(live, from, to).map((c) => c.handle));
     if (reorder.isError) reorder.reset();
   };
 
@@ -233,7 +229,7 @@ export default function CollectionsList() {
           )
         ) : (
           <div className="adm-card__pad">
-            <QueryState error={q.error ?? store.error} isPending={q.isPending} onRetry={() => void q.refetch()} />
+            <QueryState error={q.error} isPending={q.isPending} onRetry={() => void q.refetch()} />
           </div>
         )}
       </Card>
@@ -244,7 +240,7 @@ export default function CollectionsList() {
           saveLabel="Save order"
           onSave={() => reorder.mutate(orderLive)}
           onDiscard={() => {
-            setOrder(saved);
+            setEdited(null);
             reorder.reset();
           }}
         />

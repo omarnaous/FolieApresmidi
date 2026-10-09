@@ -34,7 +34,20 @@ export const cacheTagHeader = (...tags: string[]) => ({ 'cache-tag': [...new Set
  * after every save. The window is short so that a direct change to the
  * database, which purges nothing, still shows within a minute.
  */
-export const PUBLIC_CACHE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=600';
+export const PUBLIC_CACHE = 'public, max-age=0, must-revalidate';
+
+/**
+ * Cache headers for a public response, split by audience. Browsers get
+ * `max-age=0, must-revalidate`: they ask every time and never show a stale
+ * copy (a `stale-while-revalidate` they could see let one page load after a
+ * save show the old answer). Cloudflare's own cache reads only
+ * `Cloudflare-CDN-Cache-Control` and keeps the answer `edgeSeconds`, purged by
+ * tag on every admin write.
+ */
+export const publicCacheHeaders = (edgeSeconds = 60) => ({
+  'cache-control': PUBLIC_CACHE,
+  'cloudflare-cdn-cache-control': `max-age=${edgeSeconds}`,
+});
 
 /** The part of an execution context background work needs (Hono's and the runtime's both fit). */
 export interface BackgroundCtx {
@@ -45,7 +58,12 @@ export interface BackgroundCtx {
 export function purge(ctx: BackgroundCtx | undefined, tags: string[]): void {
   if (!ctx || tags.length === 0) return;
   const cache = (ctx as BackgroundCtx & { cache?: { purge(o: { tags: string[] }): Promise<unknown> } }).cache;
-  if (!cache) return;
+  if (!cache) {
+    // Workers Caching is off here, so there is nothing to purge — but say so,
+    // so a page that stays stale after a save is never a mystery
+    log.warn('cache_purge_unavailable', { tags });
+    return;
+  }
   const unique = [...new Set(tags)];
   ctx.waitUntil(
     (async () => {

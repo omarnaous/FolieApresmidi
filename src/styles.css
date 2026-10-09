@@ -1152,6 +1152,24 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 /* "waiting" is not disabled: the button still takes the tap and walks you
    to the choice you have not made yet. */
 .pdp-add { margin-top: 4px; }
+
+/* "See it in the look book": a quiet way down to the strip at the foot of the
+   page — a graded thumbnail, the count, and an arrow that nods on hover. */
+.pdp-lb-jump {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; margin-top: 12px; padding: 10px 12px 10px 10px;
+  border: 1px solid var(--ink-14); background: transparent; color: var(--ink);
+  text-align: left; cursor: pointer;
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+.pdp-lb-jump:hover { border-color: var(--ink); background: rgba(12, 11, 10, 0.02); }
+.pdp-lb-jump:focus-visible { outline: 1.5px solid var(--terra); outline-offset: 3px; }
+.pdp-lb-thumb { flex: none; width: 44px; aspect-ratio: 4 / 5; }
+.pdp-lb-text { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.pdp-lb-arrow { font-size: 16px; transition: transform 0.4s var(--ease); }
+.pdp-lb-jump:hover .pdp-lb-arrow { transform: translateY(3px); }
+/* land below the sticky bar, not under it */
+.pdp-lookbook { scroll-margin-top: calc(var(--sub-h) + 8px); }
 .pdp-add.waiting, .pdp-dock-add.waiting { opacity: 0.45; }
 
 .pdp-field.nudge .sizes .size,

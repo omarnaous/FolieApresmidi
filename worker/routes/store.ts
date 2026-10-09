@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { ProductListQuery, SubscribeInput, type CollectionDTO, type MenuItemDTO, type PageDTO, type StoreDTO, type SubscribeResultDTO } from '../../shared/api';
-import { cacheTagHeader, PUBLIC_CACHE, TAGS } from '../lib/cache';
+import { cacheTagHeader, publicCacheHeaders, TAGS } from '../lib/cache';
 import { notFound } from '../lib/errors';
 import { json, query } from '../lib/validate';
 import { clientIp, limit } from '../middleware/rate-limit';
@@ -17,7 +17,7 @@ import { and, asc, eq } from 'drizzle-orm';
 
 export const store = new Hono<AppEnv>();
 
-const publicHeaders = (...tags: string[]) => ({ 'cache-control': PUBLIC_CACHE, ...cacheTagHeader(TAGS.catalog, ...tags) });
+const publicHeaders = (...tags: string[]) => ({ ...publicCacheHeaders(), ...cacheTagHeader(TAGS.catalog, ...tags) });
 
 store.get('/store', async (c) => {
   const db = c.get('db');

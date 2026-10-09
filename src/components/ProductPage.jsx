@@ -169,6 +169,12 @@ export default function ProductPage({ handle, onClose, onOpen }) {
   // nothing in its deps changing afterwards, never re-attached.
   if (!cached) return <div className="pdp" aria-hidden="true" ref={scroller} data-lenis-prevent />;
 
+  // down the sheet to the look-book strip; the sheet is the scroller, not the window
+  const toLookbook = () => {
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('pdp-lookbook')?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+  };
+
   const bar = (
     <header className="pdp-bar">
       <button className="pdp-back label" onClick={onClose}>
@@ -440,6 +446,22 @@ export default function ProductPage({ handle, onClose, onOpen }) {
             >
               {added ? 'Added to your bag ✓' : cta}
             </button>
+
+            {/* the piece worn, in the house's photographs — further down this page */}
+            {p.lookbook?.length > 0 && (
+              <button type="button" className="pdp-lb-jump" onClick={toLookbook} aria-controls="pdp-lookbook" data-cursor="Look">
+                <span className="pdp-lb-thumb plate" aria-hidden="true">
+                  <img decoding="async" src={imageSrc({ url: p.lookbook[0] }, 320)} alt="" loading="lazy" draggable="false" />
+                </span>
+                <span className="pdp-lb-text">
+                  <span className="label">See it in the look book</span>
+                  <span className="label muted">
+                    {String(p.lookbook.length).padStart(2, '0')} {p.lookbook.length === 1 ? 'look' : 'looks'}
+                  </span>
+                </span>
+                <span className="pdp-lb-arrow" aria-hidden="true">↓</span>
+              </button>
+            )}
 
             <dl className="pdp-specs">
               {category && <div className="spec"><dt>Category</dt><dd>{category}</dd></div>}

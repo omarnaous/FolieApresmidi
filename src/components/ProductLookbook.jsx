@@ -14,7 +14,7 @@ export default function ProductLookbook({ product, urls }) {
   const [ref, seen] = useInView({ threshold: 0.12 });
 
   return (
-    <section className="pdp-look pdp-lookbook" ref={ref} data-seen={seen || undefined} aria-labelledby="pdp-lookbook-title">
+    <section id="pdp-lookbook" className="pdp-look pdp-lookbook" ref={ref} data-seen={seen || undefined} aria-labelledby="pdp-lookbook-title">
       <div className="pdp-look-head">
         <div>
           <span className="label muted">In the look book</span>

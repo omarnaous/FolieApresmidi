@@ -47,10 +47,28 @@ async function handleFor(d1: D1Database, wanted: string, id: string, explicit: b
 
 const invalidate = (c: Ctx, id: string) => purge(c.executionCtx, [TAGS.catalog, TAGS.collections, TAGS.products, TAGS.collection(id)]);
 
+/**
+ * Every collection in the order the shop shows them: the available ones as
+ * the owner arranged them, then the ones off the shop. Read straight from the
+ * saved menu, so the admin never has to piece the order together from the
+ * shop's (cached) public menu.
+ */
 adminCollections.get('/collections', staffOnly('products:read'), async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM collections ORDER BY title COLLATE NOCASE').all<Record<string, unknown>>();
+  const d1 = c.env.DB;
+  const [{ results }, settings] = await Promise.all([
+    d1.prepare('SELECT * FROM collections ORDER BY title COLLATE NOCASE').all<Record<string, unknown>>(),
+    d1.prepare('SELECT menu_json FROM store_settings WHERE id = 1').first<{ menu_json: string | null }>(),
+  ]);
+  const menu = parseJson<{ collectionHandle: string | null }[]>(settings?.menu_json ?? '[]', []);
+  const position = new Map(menu.flatMap((m, i) => (m.collectionHandle ? [[m.collectionHandle, i] as const] : [])));
+  const sorted = [...results].sort(
+    (a, b) =>
+      Number(!!b.published) - Number(!!a.published) ||
+      (position.get(a.handle as string) ?? 999) - (position.get(b.handle as string) ?? 999) ||
+      String(a.title).localeCompare(String(b.title)),
+  );
   const items: AdminCollectionDTO[] = [];
-  for (const r of results) items.push(await toDTO(c, r));
+  for (const r of sorted) items.push(await toDTO(c, r));
   return c.json({ items });
 });
 

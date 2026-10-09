@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { CollectionDTO, ProductDTO } from '../../shared/api';
 import { formatMoney } from '../../shared/money';
 import { escapeHtml } from '../email/templates';
-import { cacheTagHeader, TAGS } from '../lib/cache';
+import { cacheTagHeader, publicCacheHeaders, TAGS } from '../lib/cache';
 import { COOKIES, writeCookie } from '../lib/cookies';
 import { sign, unsign } from '../lib/crypto';
 import { collectionDTO, listProducts, productByHandle } from '../services/catalog';
@@ -32,8 +32,8 @@ export const PAGE_CSP = [
 
 const pageHeaders = (tags: string[], status = 200) => ({
   'content-type': 'text/html; charset=utf-8',
-  // browsers always revalidate the document; the edge keeps it a few minutes
-  'cache-control': status === 200 ? 'public, max-age=0, s-maxage=300, stale-while-revalidate=600' : 'no-store',
+  // browsers always revalidate the document (never a stale copy); the edge keeps it a few minutes
+  ...(status === 200 ? publicCacheHeaders(300) : { 'cache-control': 'no-store' }),
   'content-security-policy': PAGE_CSP,
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
