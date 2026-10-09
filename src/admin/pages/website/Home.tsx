@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   HomeInput,
   imageSrc,
-  MAX_FLOORS,
   MAX_LOOKBOOK,
   MAX_POPUPS,
   put,
@@ -14,15 +13,15 @@ import {
 } from '../../lib/contract';
 import { apiFieldErrors, validate, type FieldErrors } from '../../lib/forms';
 import { useUnsavedChanges } from '../../lib/hooks';
-import { qk, useHome, usePublicCollections } from '../../lib/queries';
+import { qk, useHome } from '../../lib/queries';
 import { clientKey, moveItem, sameJson } from '../../lib/util';
-import { Button, IconButton } from '../../ui/Button';
-import { CollectionSelect } from '../../ui/CollectionSelect';
+import { Button, ButtonLink, IconButton } from '../../ui/Button';
 import { ErrorBanner, FormErrorSummary, QueryState } from '../../ui/feedback';
 import { Select, Textarea, TextInput, Toggle } from '../../ui/form';
 import { IconArrowDown, IconArrowUp, IconChevronLeft, IconChevronRight, IconPlus, IconTrash } from '../../ui/icons';
 import { Card, PageHeader, SaveBar } from '../../ui/layout';
-import { ImageUploader, SingleImageField } from '../../ui/media';
+import { ImageUploader } from '../../ui/media';
+import { Thumb } from '../../ui/Table';
 import { SiteFileField } from '../../ui/SiteFile';
 import { WebsiteTabs } from './Tabs';
 import { useToast } from '../../ui/Toasts';
@@ -44,14 +43,6 @@ interface SectionRow {
   visible: boolean;
 }
 
-interface FloorRow {
-  key: string;
-  name: string;
-  line: string;
-  collectionHandle: string | null;
-  image: MediaDTO | null;
-}
-
 interface PopUpRow extends PopUpDTO {
   key: string;
 }
@@ -62,7 +53,6 @@ interface HomeDraft {
   ribbon: string[];
   heading: string;
   intro: string;
-  floors: FloorRow[];
   boutiqueHeading: string;
   boutiqueIntro: string;
   accessoriesHeading: string;
@@ -87,7 +77,6 @@ const fromDTO = (h: AdminHomeDTO): HomeDraft => ({
   ribbon: h.ribbon,
   heading: h.maison.heading,
   intro: h.maison.intro ?? '',
-  floors: h.floors.map((f) => ({ key: clientKey('f'), name: f.name, line: f.line ?? '', collectionHandle: f.collectionHandle, image: f.image })),
   boutiqueHeading: h.boutique.heading ?? '',
   boutiqueIntro: h.boutique.intro ?? '',
   accessoriesHeading: h.accessories.heading,
@@ -123,7 +112,6 @@ export default function WebsitePage() {
 function HomeForm({ home }: { home: AdminHomeDTO }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const collections = usePublicCollections();
   const [saved, setSaved] = useState(home);
   const [base, setBase] = useState<HomeDraft>(() => fromDTO(home));
   const [draft, setDraft] = useState<HomeDraft>(base);
@@ -131,16 +119,9 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
   const dirty = !sameJson(base, draft);
   useUnsavedChanges(dirty);
 
-  // what a floor shows without its own image, as of the last save
-  const fallbacks = useMemo(
-    () => new Map(saved.floors.flatMap((f) => (f.collectionHandle && f.fallback ? [[f.collectionHandle, f.fallback] as const] : []))),
-    [saved],
-  );
-
   const set = <K extends keyof HomeDraft>(k: K, v: HomeDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const setSection = (key: HomeSectionKey, patch: Partial<SectionRow>) =>
     set('sections', draft.sections.map((s) => (s.key === key ? { ...s, ...patch } : s)));
-  const setFloor = (key: string, patch: Partial<FloorRow>) => set('floors', draft.floors.map((f) => (f.key === key ? { ...f, ...patch } : f)));
 
   const save = useMutation({
     mutationFn: (body: HomeInput) => put<AdminHomeDTO>('/api/admin/home', body),
@@ -164,12 +145,6 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
       hero: { videoMediaId: draft.video?.id ?? null },
       ribbon: draft.ribbon,
       maison: { heading: draft.heading, intro: draft.intro.trim() || null },
-      floors: draft.floors.map((f) => ({
-        name: f.name,
-        line: f.line.trim() || null,
-        collectionHandle: f.collectionHandle,
-        imageMediaId: f.image?.id ?? null,
-      })),
       boutique: { heading: draft.boutiqueHeading.trim() || null, intro: draft.boutiqueIntro.trim() || null },
       accessories: { heading: draft.accessoriesHeading, intro: draft.accessoriesIntro.trim() || null },
       lookbook: {
@@ -196,15 +171,12 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
     save.mutate(body);
   };
 
-  const options = collections.data?.items ?? [];
-  const failed = !!collections.error;
   const named = (key: HomeSectionKey, fallback: string) => draft.sections.find((s) => s.key === key)?.label || fallback;
   const maisonName = named('maison', 'Maison');
   const accessoriesName = named('accessories', 'Accessories');
   const number = numbers(draft.sections);
   /** "04 — Accessories", or "Accessories (switched off)" while it is hidden. */
   const cardTitle = (key: HomeSectionKey, name: string) => (number[key] ? `${number[key]} — ${name}` : `${name} (switched off)`);
-  const addFloor = () => set('floors', [...draft.floors, { key: clientKey('f'), name: '', line: '', collectionHandle: null, image: null }]);
   const addPopUp = () => set('popups', [...draft.popups, { key: clientKey('p'), place: '', city: '', dates: '', time: '', status: 'open' }]);
   const setPopUp = (key: string, patch: Partial<PopUpRow>) => set('popups', draft.popups.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   // what the boutique is called today, so the empty title field can show it
@@ -307,85 +279,30 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
         <Card
           title="Floors"
           actions={
-            draft.floors.length < MAX_FLOORS ? (
-              <Button size="sm" icon={<IconPlus size={14} />} onClick={addFloor}>
-                Add floor
-              </Button>
-            ) : undefined
+            <ButtonLink size="sm" to="/admin/collections">
+              Arrange collections
+            </ButtonLink>
           }
         >
           <p className="adm-field__hint">
-            The lift directory in {maisonName}, first floor first. Each floor opens its collection. Without an image of its own, a floor shows its collection’s picture.
+            The lift directory in {maisonName} is your collections, in the order set under <strong>Collections</strong> — the same order as the
+            boutique’s tabs. Each floor takes its collection’s name, its subtitle as the line, and its picture (or its first piece’s). To change a
+            floor, edit or reorder the collection.
           </p>
-          {errors.floors && <p className="adm-field__error">{errors.floors}</p>}
-          {draft.floors.length === 0 ? (
-            <p className="adm-muted adm-gap-top">No floors yet.</p>
+          {saved.floors.length === 0 ? (
+            <p className="adm-muted adm-gap-top">No collections are on the shop yet.</p>
           ) : (
-            <ol className="adm-floorrows">
-              {draft.floors.map((f, i) => {
-                const title = f.name || `floor ${i + 1}`;
-                return (
-                  <li key={f.key} className="adm-floorrow">
-                    <span className="adm-floorrow__num" aria-hidden="true">{i + 1}</span>
-                    <div className="adm-floorrow__image">
-                      <SingleImageField
-                        label="Image"
-                        value={f.image}
-                        onChange={(m) => setFloor(f.key, { image: m })}
-                        fallback={f.collectionHandle ? fallbacks.get(f.collectionHandle) ?? null : null}
-                        fallbackHint={f.collectionHandle ? 'Using the collection’s picture.' : undefined}
-                      />
-                      {errors[`floors.${i}.imageMediaId`] && <p className="adm-field__error">{errors[`floors.${i}.imageMediaId`]}</p>}
-                    </div>
-                    <div className="adm-stack">
-                      <div className="adm-grid adm-grid--2">
-                        <TextInput
-                          label={`Floor ${i + 1} name`}
-                          placeholder="Tops"
-                          value={f.name}
-                          maxLength={30}
-                          error={errors[`floors.${i}.name`]}
-                          onChange={(e) => setFloor(f.key, { name: e.target.value })}
-                        />
-                        <CollectionSelect
-                          options={options}
-                          failed={failed}
-                          label="Opens"
-                          value={f.collectionHandle ?? ''}
-                          emptyLabel="All products"
-                          error={errors[`floors.${i}.collectionHandle`]}
-                          onChange={(v) => setFloor(f.key, { collectionHandle: v || null })}
-                        />
-                      </div>
-                      <TextInput
-                        label="Line"
-                        optional
-                        placeholder="Draped, cropped, bare-shouldered."
-                        value={f.line}
-                        maxLength={120}
-                        error={errors[`floors.${i}.line`]}
-                        onChange={(e) => setFloor(f.key, { line: e.target.value })}
-                      />
-                    </div>
-                    <span className="adm-row adm-row--tight adm-floorrow__tools">
-                      <IconButton label={`Move ${title} up`} disabled={i === 0} onClick={() => set('floors', moveItem(draft.floors, i, i - 1))}>
-                        <IconArrowUp size={14} />
-                      </IconButton>
-                      <IconButton label={`Move ${title} down`} disabled={i === draft.floors.length - 1} onClick={() => set('floors', moveItem(draft.floors, i, i + 1))}>
-                        <IconArrowDown size={14} />
-                      </IconButton>
-                      <IconButton
-                        label={`Remove ${title}`}
-                        tone="danger"
-                        disabled={draft.floors.length === 1}
-                        onClick={() => set('floors', draft.floors.filter((x) => x.key !== f.key))}
-                      >
-                        <IconTrash size={14} />
-                      </IconButton>
-                    </span>
-                  </li>
-                );
-              })}
+            <ol className="adm-orderlist adm-orderlist--inset adm-gap-top">
+              {saved.floors.map((f, i) => (
+                <li key={f.collectionHandle ?? i} className="adm-orderlist__item">
+                  <span className="adm-orderlist__pos">{i + 1}</span>
+                  <Thumb src={f.image ? imageSrc(f.image, 320) : null} size={44} />
+                  <span className="adm-orderlist__title">
+                    {f.name}
+                    {f.line && <span className="adm-muted adm-small adm-block">{f.line}</span>}
+                  </span>
+                </li>
+              ))}
             </ol>
           )}
         </Card>
