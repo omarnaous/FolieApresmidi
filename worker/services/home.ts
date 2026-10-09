@@ -39,7 +39,8 @@ export const HOME_DEFAULTS: Home = {
     { key: 'popups', label: 'Where to find us', navLabel: 'Find us', visible: true },
   ],
   maison: {
-    heading: 'Four floors, *one long afternoon*',
+    // no count in it: the floors are the collections, and their number changes
+    heading: 'One house, *one long afternoon*',
     intro:
       'Step in and let the doors close behind you. The house rises a floor at a time — every stop its own mood, every piece made in Lebanon. Take the lift, or take the stairs and linger.',
   },
