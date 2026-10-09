@@ -34,15 +34,20 @@ export default function Shop({ onOpen, onAll }) {
   // collection to the top in the admin changes which drop leads here, not only
   // the tab strip. With no menu set, the featured collection stands in.
   const drop = tabs[0]?.value ?? store?.featuredCollectionHandle ?? null;
-  const lead = useCollection(drop);
-
-  // the owner's own title wins; with none, the leading drop names the section
-  const copy = store?.home?.boutique;
-  const heading = copy?.heading || ((drop && !lead.isError ? lead.data?.title : store?.name) ?? ' ');
 
   const [active, setActive] = useState(null);
-  // follow the leading drop; a shopper's own tab pick is left alone
+  // open on the leading drop; a shopper's own tab pick is then left alone
   useEffect(() => { setActive(drop); }, [drop]);
+
+  // the selected tab's collection names the section and carries its season
+  // line, so the title and subtitle follow whichever drop is being looked at.
+  // The tab's own label titles it at once; the collection load only adds the
+  // subtitle, so the heading never flickers on a tab change.
+  const shown = active ?? drop;
+  const current = useCollection(shown);
+  const copy = store?.home?.boutique;
+  const shownLabel = tabs.find((t) => t.value === shown)?.label;
+  const heading = copy?.heading || (shownLabel ?? current.data?.title ?? store?.name ?? ' ');
 
   return (
     <section className="section shell has-shelf" id="boutique">
@@ -51,7 +56,7 @@ export default function Shop({ onOpen, onAll }) {
           <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow}</div>
           <h2 className="display d-md">{emphasis(heading)}</h2>
           {copy?.intro ? <p className="sec-sub">{copy.intro}</p>
-            : lead.data?.subtitle && <p className="sec-sub">{lead.data.subtitle}</p>}
+            : current.data?.subtitle && <p className="sec-sub">{current.data.subtitle}</p>}
         </div>
         <ShelfTabs
           options={tabs}
