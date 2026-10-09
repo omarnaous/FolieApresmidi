@@ -1547,11 +1547,6 @@ export const HomeInput = z.object({
       careNote: zLine(200),
     })
     .default({ blurb: '', careNote: null }),
-  /**
-   * No longer edited here: the lift directory is the shop's collections, in
-   * the order set under Collections. Accepted (and ignored) so an older admin
-   * screen can still save the rest of the page.
-   */
   floors: z
     .array(
       z.object({
@@ -1561,8 +1556,8 @@ export const HomeInput = z.object({
         imageMediaId: zId.nullable(),
       }),
     )
-    .max(MAX_FLOORS)
-    .default([]),
+    .min(1, 'Add at least one floor')
+    .max(MAX_FLOORS),
 });
 export type HomeInput = z.input<typeof HomeInput>;
 

@@ -1,4 +1,4 @@
-import { HOME_SECTIONS, MAX_FLOORS, type AdminHomeDTO, type FloorDTO, type HomeDTO, type HomeInput, type HomeSectionDTO, type MediaDTO, type PopUpDTO } from '../../shared/api';
+import { HOME_SECTIONS, type AdminHomeDTO, type FloorDTO, type HomeDTO, type HomeInput, type HomeSectionDTO, type MediaDTO, type PopUpDTO } from '../../shared/api';
 import { parseJson } from '../db/client';
 import { chunk, mediaByIdsRaw } from './media';
 
@@ -126,7 +126,7 @@ export const homeFromInput = (input: HomeInput): Home => ({
   hero: { videoMediaId: input.hero?.videoMediaId ?? null },
   ribbon: (input.ribbon ?? []).map((w) => w.trim()).filter(Boolean),
   maison: { heading: input.maison.heading, intro: input.maison.intro ?? null },
-  floors: (input.floors ?? []).map((f) => ({
+  floors: input.floors.map((f) => ({
     name: f.name,
     line: f.line ?? null,
     collectionHandle: f.collectionHandle,
@@ -182,28 +182,14 @@ async function collectionCovers(d1: D1Database, handles: string[]): Promise<Map<
   return covers;
 }
 
-/**
- * The lift directory: one floor per collection on the shop, in the order set
- * under Collections — the same order as the boutique's tabs and the menu, so
- * reordering there moves the floors too. Each floor is named after its
- * collection, carries its subtitle as the line, and shows its picture (or
- * else its first piece's). There is no second list of floors to keep in step.
- */
-async function collectionFloors(d1: D1Database): Promise<FloorDTO[]> {
-  const [{ results }, settings] = await Promise.all([
-    d1.prepare('SELECT handle, title, subtitle FROM collections WHERE published = 1').all<{ handle: string; title: string; subtitle: string | null }>(),
-    d1.prepare('SELECT menu_json FROM store_settings WHERE id = 1').first<{ menu_json: string | null }>(),
-  ]);
-  const menu = parseJson<{ collectionHandle: string | null }[]>(settings?.menu_json ?? '[]', []);
-  const at = new Map(menu.flatMap((m, i) => (m.collectionHandle ? [[m.collectionHandle, i] as const] : [])));
-  const list = [...results]
-    .sort((a, b) => (at.get(a.handle) ?? 999) - (at.get(b.handle) ?? 999) || a.title.localeCompare(b.title))
-    .slice(0, MAX_FLOORS);
-  const covers = await collectionCovers(d1, list.map((c) => c.handle));
-  const media = await mediaByIdsRaw(d1, [...covers.values()]);
-  return list.map((c) => {
-    const cover = covers.get(c.handle);
-    return { name: c.title, line: c.subtitle ?? null, collectionHandle: c.handle, image: cover ? media.get(cover) ?? null : null };
+async function resolveFloors(d1: D1Database, floors: StoredFloor[]) {
+  const covers = await collectionCovers(d1, floors.flatMap((f) => (f.collectionHandle ? [f.collectionHandle] : [])));
+  const media = await mediaByIdsRaw(d1, [...floors.flatMap((f) => (f.imageMediaId ? [f.imageMediaId] : [])), ...covers.values()]);
+  return floors.map((f) => {
+    const chosen = f.imageMediaId ? media.get(f.imageMediaId) ?? null : null;
+    const coverId = f.collectionHandle ? covers.get(f.collectionHandle) : undefined;
+    const fallback: MediaDTO | null = coverId ? media.get(coverId) ?? null : null;
+    return { floor: f, chosen, fallback };
   });
 }
 
@@ -240,12 +226,32 @@ const common = (home: Home, notebook: MediaDTO | null, video: MediaDTO | null, l
 });
 
 export async function homeDTO(d1: D1Database, home: Home): Promise<HomeDTO> {
-  const [{ video, notebook }, floors, lookbook] = await Promise.all([resolveFiles(d1, home), collectionFloors(d1), resolveLookbook(d1, home)]);
+  const [{ video, notebook }, resolved, lookbook] = await Promise.all([
+    resolveFiles(d1, home),
+    resolveFloors(d1, home.floors),
+    resolveLookbook(d1, home),
+  ]);
+  const floors: FloorDTO[] = resolved.map(({ floor, chosen, fallback }) => ({
+    name: floor.name,
+    line: floor.line,
+    collectionHandle: floor.collectionHandle,
+    image: chosen ?? fallback,
+  }));
   return { ...common(home, notebook, video, lookbook), floors };
 }
 
 export async function adminHomeDTO(d1: D1Database, home: Home, updatedAt: number): Promise<AdminHomeDTO> {
-  const [{ video, notebook }, floors, lookbook] = await Promise.all([resolveFiles(d1, home), collectionFloors(d1), resolveLookbook(d1, home)]);
-  // shown to the owner as they appear on the shop; edited per collection, not here
-  return { ...common(home, notebook, video, lookbook), floors: floors.map((f) => ({ ...f, fallback: null })), updatedAt };
+  const [{ video, notebook }, resolved, lookbook] = await Promise.all([
+    resolveFiles(d1, home),
+    resolveFloors(d1, home.floors),
+    resolveLookbook(d1, home),
+  ]);
+  const floors = resolved.map(({ floor, chosen, fallback }) => ({
+    name: floor.name,
+    line: floor.line,
+    collectionHandle: floor.collectionHandle,
+    image: chosen,
+    fallback,
+  }));
+  return { ...common(home, notebook, video, lookbook), floors, updatedAt };
 }

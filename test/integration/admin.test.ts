@@ -341,10 +341,7 @@ describe('home page content', () => {
       intro: 'Gold, stone and pearl — designed and produced in limited quantities in Lebanon.',
     });
     expect(store.data.home.sections[0]).toMatchObject({ label: 'Maison FDM', navLabel: 'Maison' });
-    // the lift directory is the shop's collections, in the menu's order
-    expect(store.data.home.floors.map((f) => f.collectionHandle)).toEqual(
-      store.data.menu.flatMap((m) => (m.collectionHandle ? [m.collectionHandle] : [])).slice(0, 8),
-    );
+    expect(store.data.home.floors.map((f) => f.name)).toEqual(['Tops', 'Bottoms', 'Bralettes', 'Accessories']);
   });
 
   it('switches a section off the page and back on', async () => {
@@ -449,50 +446,50 @@ describe('home page content', () => {
     expect((await new Shopper().json('PUT', '/api/admin/home', home([{ name: 'Tops', collectionHandle: null, imageMediaId: null }]))).status).toBe(401);
   });
 
-  it('still refuses floors that point at nothing, but no longer needs any', async () => {
+  it('refuses floors that point at nothing', async () => {
     const res = await owner.json('PUT', '/api/admin/home', home([
       { name: 'Tops', collectionHandle: 'no-such-collection', imageMediaId: null },
       { name: 'Bottoms', collectionHandle: null, imageMediaId: 'no-such-image' },
     ]));
     expect(res.status).toBe(422);
     expect(Object.keys(res.data.error.fields)).toEqual(expect.arrayContaining(['floors.0.collectionHandle', 'floors.1.imageMediaId']));
-    // floors are not edited on this page any more: saving it without them is fine
-    expect((await owner.json('PUT', '/api/admin/home', home([]))).status).toBe(200);
+    const empty = await owner.json('PUT', '/api/admin/home', home([]));
+    expect(empty.status).toBe(422);
   });
 
-  it('makes the lift directory the collections, in the order set under Collections', async () => {
+  it('saves names and floors, and pictures a floor from its collection', async () => {
     const product = await createProduct();
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO media (id, r2_key, mime, alt, created_at) VALUES ('m-cover', 'products/test/cover.jpg', 'image/jpeg', 'Cover', ?)`).bind(now),
+      env.DB.prepare(`INSERT INTO media (id, r2_key, mime, alt, created_at) VALUES ('m-chosen', 'brand/floor.jpg', 'image/jpeg', 'Chosen', ?)`).bind(now),
       env.DB.prepare(`INSERT INTO product_media (product_id, media_id, position) VALUES (?, 'm-cover', 0)`).bind(product.id),
-      env.DB.prepare(`INSERT INTO collections (id, handle, title, subtitle, type, created_at, updated_at) VALUES ('col-fa', 'floor-a', 'Floor A', 'Season A', 'manual', ?, ?)`).bind(now, now),
-      env.DB.prepare(`INSERT INTO collections (id, handle, title, type, created_at, updated_at) VALUES ('col-fb', 'floor-b', 'Floor B', 'manual', ?, ?)`).bind(now, now),
-      env.DB.prepare(`INSERT INTO collection_products (collection_id, product_id, position) VALUES ('col-fb', ?, 0)`).bind(product.id),
-    ]);
-    const floorsNow = async () => (await new Shopper().json<StoreDTO>('GET', '/api/store')).data.home.floors.slice(0, 2);
-
-    expect((await owner.json('PUT', '/api/admin/collections/order', { handles: ['floor-b', 'floor-a'] })).status).toBe(204);
-    expect(await floorsNow()).toEqual([
-      // named after the collection, pictured by its first piece
-      { name: 'Floor B', line: null, collectionHandle: 'floor-b', image: expect.objectContaining({ id: 'm-cover', url: '/media/products/test/cover.jpg' }) },
-      // its subtitle is the floor's line
-      { name: 'Floor A', line: 'Season A', collectionHandle: 'floor-a', image: null },
+      env.DB.prepare(`INSERT INTO collections (id, handle, title, type, created_at, updated_at) VALUES ('col-floor', 'floor-tops', 'Floor tops', 'manual', ?, ?)`).bind(now, now),
+      env.DB.prepare(`INSERT INTO collection_products (collection_id, product_id, position) VALUES ('col-floor', ?, 0)`).bind(product.id),
     ]);
 
-    // reordering the collections reorders the floors — there is no second list
-    await owner.json('PUT', '/api/admin/collections/order', { handles: ['floor-a', 'floor-b'] });
-    expect((await floorsNow()).map((f) => f.name)).toEqual(['Floor A', 'Floor B']);
-
-    // the admin shows the same floors, and the rest of the page still saves
-    const saved = await owner.json<AdminHomeDTO>('PUT', '/api/admin/home', home([], 'La Maison'));
+    const saved = await owner.json<AdminHomeDTO>('PUT', '/api/admin/home', home([
+      { name: 'Tops', line: 'First floor', collectionHandle: 'floor-tops', imageMediaId: null },
+      { name: 'Everything', collectionHandle: null, imageMediaId: 'm-chosen' },
+    ], 'La Maison'));
     expect(saved.status).toBe(200);
-    expect(saved.data.floors.slice(0, 2).map((f) => f.name)).toEqual(['Floor A', 'Floor B']);
+    // the admin sees what was chosen, and separately what shows without it
+    expect(saved.data.floors[0]).toMatchObject({ name: 'Tops', image: null, fallback: { id: 'm-cover' } });
+    expect(saved.data.floors[1]).toMatchObject({ image: { id: 'm-chosen' }, fallback: null });
+
     const store = await new Shopper().json<StoreDTO>('GET', '/api/store');
     expect(store.data.home.sections[0]).toMatchObject({ key: 'maison', label: 'La Maison', navLabel: 'House' });
     expect(store.data.home.maison).toEqual({ heading: 'Two floors, *one address*', intro: 'Take the lift.' });
     // an empty subtitle is stored as none
     expect(store.data.home.accessories).toEqual({ heading: 'Small things, *said loudly*', intro: null });
+    expect(store.data.home.floors).toEqual([
+      { name: 'Tops', line: 'First floor', collectionHandle: 'floor-tops', image: expect.objectContaining({ id: 'm-cover', url: '/media/products/test/cover.jpg' }) },
+      { name: 'Everything', line: null, collectionHandle: null, image: expect.objectContaining({ id: 'm-chosen' }) },
+    ]);
+
+    const again = await owner.json<AdminHomeDTO>('GET', '/api/admin/home');
+    expect(again.data.sections[0]!.label).toBe('La Maison');
+    expect(again.data.floors).toHaveLength(2);
   });
 });
 
