@@ -50,7 +50,8 @@ export default function Shop({ onOpen, onAll }) {
         <div>
           <div className="label muted" style={{ marginBottom: 14 }}>{eyebrow}</div>
           <h2 className="display d-md">{emphasis(heading)}</h2>
-          {copy?.intro && <p className="sec-sub">{copy.intro}</p>}
+          {copy?.intro ? <p className="sec-sub">{copy.intro}</p>
+            : lead.data?.subtitle && <p className="sec-sub">{lead.data.subtitle}</p>}
         </div>
         <ShelfTabs
           options={tabs}

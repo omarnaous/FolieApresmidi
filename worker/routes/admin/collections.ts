@@ -21,6 +21,7 @@ async function toDTO(c: Ctx, r: Record<string, unknown>): Promise<AdminCollectio
     id: r.id as string,
     handle: r.handle as string,
     title: r.title as string,
+    subtitle: (r.subtitle as string | null) ?? null,
     descriptionHtml: r.description_html as string,
     type: r.type as 'manual' | 'smart',
     rules: parseJson<RuleSet>(r.rules_json as string, { match: 'all', conditions: [] }),
@@ -61,10 +62,10 @@ adminCollections.post('/collections', staffOnly('products:write'), json(AdminCol
   const handle = await handleFor(d1, input.handle ?? input.title, id, !!input.handle);
   await d1
     .prepare(
-      `INSERT INTO collections (id, handle, title, description_html, type, rules_json, sort, image_media_id, published, seo_title, seo_description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'manual', '{"match":"all","conditions":[]}', ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO collections (id, handle, title, subtitle, description_html, type, rules_json, sort, image_media_id, published, seo_title, seo_description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'manual', '{"match":"all","conditions":[]}', ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, handle, input.title, await sanitizeHtml(input.descriptionHtml), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, now, now)
+    .bind(id, handle, input.title, input.subtitle, await sanitizeHtml(input.descriptionHtml), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, now, now)
     .run();
   invalidate(c, id);
   await audit(c, 'collection.created', 'collection', id, `Created collection "${input.title}"`);
@@ -112,10 +113,10 @@ adminCollections.put('/collections/:id', staffOnly('products:write'), json(Admin
   const handle = await handleFor(d1, input.handle ?? (row.handle as string), id, !!input.handle && input.handle !== row.handle);
   await d1
     .prepare(
-      `UPDATE collections SET handle = ?, title = ?, description_html = ?, sort = ?, image_media_id = ?, published = ?, seo_title = ?, seo_description = ?, updated_at = ?
+      `UPDATE collections SET handle = ?, title = ?, subtitle = ?, description_html = ?, sort = ?, image_media_id = ?, published = ?, seo_title = ?, seo_description = ?, updated_at = ?
         WHERE id = ?`,
     )
-    .bind(handle, input.title, await sanitizeHtml(input.descriptionHtml), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, Date.now(), id)
+    .bind(handle, input.title, input.subtitle, await sanitizeHtml(input.descriptionHtml), input.sort, input.imageId, input.published ? 1 : 0, input.seoTitle, input.seoDescription, Date.now(), id)
     .run();
   invalidate(c, id);
   await audit(c, 'collection.updated', 'collection', id, `Updated collection "${input.title}"`);

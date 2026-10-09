@@ -1484,6 +1484,8 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   background: var(--bone);
 }
 .cat-bar-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+/* the collection's season line, under its name */
+.cat-subtitle { margin-top: 8px; color: var(--terra); letter-spacing: 0.2em; }
 
 /* in the plain search the field's own rule is line enough — drop the section divider */
 .cat.is-search .cat-bar { border-bottom: 0; }

@@ -528,6 +528,7 @@ export async function collectionDTO(db: DB, c: CollectionRow): Promise<Collectio
     id: c.id,
     handle: c.handle,
     title: c.title,
+    subtitle: c.subtitle ?? null,
     description,
     descriptionHtml: c.descriptionHtml,
     image: c.imageMediaId ? await mediaById(db, c.imageMediaId) : null,

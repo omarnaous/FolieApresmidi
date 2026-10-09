@@ -205,6 +205,8 @@ export const collections = sqliteTable(
     id: id(),
     handle: text('handle').notNull().unique(),
     title: text('title').notNull(),
+    /** a short season line under the title, e.g. "Fall Winter 25–26" */
+    subtitle: text('subtitle'),
     descriptionHtml: text('description_html').notNull().default(''),
     type: text('type', { enum: ['manual', 'smart'] }).notNull(),
     rulesJson: text('rules_json').notNull().default('{"match":"all","conditions":[]}'),

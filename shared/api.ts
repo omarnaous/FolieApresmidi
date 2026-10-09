@@ -352,6 +352,8 @@ export interface CollectionDTO {
   id: string;
   handle: string;
   title: string;
+  /** a short season line under the title, e.g. "Fall Winter 25–26" */
+  subtitle: string | null;
   description: string;
   descriptionHtml: string;
   image: MediaDTO | null;
@@ -1009,6 +1011,7 @@ export const CollectionRuleInput = z.object({
 /** Every collection is a list the owner picks by hand; there are no rules to write. */
 export const AdminCollectionInput = z.object({
   title: z.string().trim().min(1).max(200),
+  subtitle: z.string().trim().max(200).nullish().transform((v) => v || null),
   handle: zHandle.optional(),
   descriptionHtml: z.string().max(50_000).default(''),
   sort: z.enum(COLLECTION_SORTS).default('manual'),
@@ -1023,6 +1026,7 @@ export interface AdminCollectionDTO {
   id: string;
   handle: string;
   title: string;
+  subtitle: string | null;
   descriptionHtml: string;
   type: 'manual' | 'smart';
   rules: { match: 'all' | 'any'; conditions: { field: CollectionRuleField; op: CollectionRuleOp; value: string }[] };

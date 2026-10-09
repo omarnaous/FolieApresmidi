@@ -186,6 +186,9 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
           <div>
             <div className="label muted">{isSearch ? 'Search' : 'Catalogue'}</div>
             <h2 className="display d-sm" style={{ marginTop: 6 }}>{title}</h2>
+            {!isSearch && collection.data?.subtitle && (
+              <p className="cat-subtitle label">{collection.data.subtitle}</p>
+            )}
           </div>
           <button className="label link-u" onClick={onClose} data-cursor="Close">Close</button>
         </div>

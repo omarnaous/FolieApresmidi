@@ -63,6 +63,7 @@ const SORT_LABELS: Record<CollectionSort, string> = {
 
 interface CollectionDraft {
   title: string;
+  subtitle: string;
   handle: string;
   handleTouched: boolean;
   descriptionHtml: string;
@@ -75,6 +76,7 @@ interface CollectionDraft {
 
 const fromDTO = (c: AdminCollectionDTO): CollectionDraft => ({
   title: c.title,
+  subtitle: c.subtitle ?? '',
   handle: c.handle,
   handleTouched: true,
   descriptionHtml: c.descriptionHtml,
@@ -87,6 +89,7 @@ const fromDTO = (c: AdminCollectionDTO): CollectionDraft => ({
 
 const emptyDraft = (): CollectionDraft => ({
   title: '',
+  subtitle: '',
   handle: '',
   handleTouched: false,
   descriptionHtml: '',
@@ -182,6 +185,7 @@ function CollectionForm({ collection, currency }: { collection: AdminCollectionD
     if (save.isPending) return;
     const payload: AdminCollectionInput = {
       title: draft.title,
+      subtitle: draft.subtitle.trim() || null,
       handle: draft.handle.trim() || undefined,
       descriptionHtml: draft.descriptionHtml,
       sort: draft.sort,
@@ -228,6 +232,14 @@ function CollectionForm({ collection, currency }: { collection: AdminCollectionD
                     setDraft((d) => ({ ...d, title, handle: d.handleTouched ? d.handle : slugify(title) }));
                   }}
                   autoFocus={isNew}
+                />
+                <TextInput
+                  label="Subtitle"
+                  value={draft.subtitle}
+                  maxLength={200}
+                  error={errors.subtitle}
+                  hint="A short season line under the title, e.g. “Fall Winter 25–26”."
+                  onChange={(e) => set('subtitle', e.target.value)}
                 />
                 <HtmlField label="Description" value={draft.descriptionHtml} error={errors.descriptionHtml} rows={6} onChange={(v) => set('descriptionHtml', v)} />
               </div>
