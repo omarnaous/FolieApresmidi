@@ -10,6 +10,8 @@ import { useInView } from '../hooks/useInView';
 import { LOOKBOOK } from '../data/lookbook';
 
 const SIZES = '(max-width: 760px) 74vw, (max-width: 1100px) 40vw, 26vw';
+/** The home page shows a taste, as the boutique shelf does; the full set opens behind the button. */
+const RAIL_MAX = 12;
 
 /**
  * The lookbook images, the owner's own or — until any are set in the admin —
@@ -42,7 +44,7 @@ export default function Lookbook() {
   const navigate = useNavigate();
   const { data: store } = useStore();
   const copy = store?.home?.lookbook;
-  const looks = useLooks();
+  const looks = useLooks().slice(0, RAIL_MAX);
 
   const openAll = () => navigate('/lookbook');
 

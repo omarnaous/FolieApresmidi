@@ -88,10 +88,18 @@
       "name": "fdm-preview",
       "workers_dev": true,
       "preview_urls": false,
+      // resizes /media/*?w= on the edge, so a phone decodes a phone-sized photo.
+      // Free plan: 5,000 unique resizes a month; past that the original is served.
+      "images": { "binding": "IMAGES" },
+      // the house's own domain; the .workers.dev URL stays on as a fallback
+      "routes": [
+        { "pattern": "folliesdapresmidi.com", "custom_domain": true },
+        { "pattern": "www.folliesdapresmidi.com", "custom_domain": true }
+      ],
       "vars": {
         "APP_ENV": "staging",
-        "APP_URL": "https://fdm-preview.follies.workers.dev",
-        "ALLOWED_ORIGINS": "https://fdm-preview.follies.workers.dev",
+        "APP_URL": "https://folliesdapresmidi.com",
+        "ALLOWED_ORIGINS": "https://folliesdapresmidi.com,https://www.folliesdapresmidi.com",
         // Brevo will only send from an address it has seen verified. This is
         // the one the account was opened with; change it here when the
         // house's own domain is verified in Brevo.

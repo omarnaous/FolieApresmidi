@@ -296,6 +296,11 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 }
 .lb-sheet-body { flex: 1; overflow-y: auto; padding-block: clamp(24px, 3vw, 44px) clamp(60px, 9vw, 110px); }
 .lb-grid--all { margin-top: 0; }
+/* Seventy graded plates, each with a filter and a blended wash, is more than a
+   phone's memory holds at once — iOS Safari kills the tab. Plates off screen
+   are skipped (no paint, no layers), so only the few in view cost anything.
+   The box keeps its 4:5 size from the grid width, so nothing jumps. */
+.lb-grid--all .lb-plate { content-visibility: auto; contain-intrinsic-size: auto 520px; }
 
 .rise {
   display: block;
