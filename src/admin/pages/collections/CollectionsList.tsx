@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
-import { patch, put, type AdminCollectionDTO } from '../../lib/contract';
+import { patch, put, type AdminCollectionDTO, type StoreDTO } from '../../lib/contract';
 import { fmtDate } from '../../lib/format';
+import { useUnsavedChanges } from '../../lib/hooks';
 import { moveItem } from '../../lib/util';
 import { qk, useCollections, useStore } from '../../lib/queries';
 import { useCan } from '../../lib/session';
@@ -10,7 +11,7 @@ import { ButtonLink } from '../../ui/Button';
 import { EmptyState, ErrorBanner, QueryState } from '../../ui/feedback';
 import { TextInput, Toggle } from '../../ui/form';
 import { IconMenu, IconPlus } from '../../ui/icons';
-import { Card, PageHeader } from '../../ui/layout';
+import { Card, PageHeader, SaveBar } from '../../ui/layout';
 import { useToast } from '../../ui/Toasts';
 
 /**
@@ -41,10 +42,20 @@ export default function CollectionsList() {
     [q.data, menuOrder],
   );
 
-  /* What the screen shows while a row is being moved: the server hears about
-     it on the drop, and this follows the server again afterwards. */
+  /* The order on screen. Moves stay here until Save; a refresh of the saved
+     order only replaces it while nothing is waiting to be saved. */
   const [order, setOrder] = useState(saved);
-  useEffect(() => setOrder(saved), [saved]);
+  const savedLive = saved.filter((c) => c.published).map((c) => c.handle);
+  const orderLive = order.filter((c) => c.published).map((c) => c.handle);
+  const dirty = savedLive.join('|') !== orderLive.join('|');
+  useEffect(() => {
+    if (!dirty) return setOrder(saved);
+    // a move is waiting: keep its order, but take each collection's fresh state (a switch flipped meanwhile)
+    const fresh = new Map(saved.map((c) => [c.handle, c]));
+    setOrder((o) => o.map((c) => fresh.get(c.handle) ?? c));
+    // only when the saved order itself changes
+  }, [saved]);
+  useUnsavedChanges(dirty);
   const [dragging, setDragging] = useState<string | null>(null);
   /** the row the carried one is hovering, so the line shows where it lands */
   const [over, setOver] = useState<string | null>(null);
@@ -59,8 +70,17 @@ export default function CollectionsList() {
 
   const reorder = useMutation({
     mutationFn: (handles: string[]) => put<void>('/api/admin/collections/order', { handles }),
-    onSuccess: refresh,
-    onError: () => setOrder(saved),
+    onSuccess: (_, handles) => {
+      // the shop's menu, as just saved — so the list does not wait on a refetch to agree
+      qc.setQueryData<StoreDTO>(qk.store, (old) =>
+        old ? { ...old, menu: [...old.menu.filter((m) => !m.collectionHandle), ...handles.map((h) => ({ label: order.find((c) => c.handle === h)?.title ?? h, collectionHandle: h }))] } : old,
+      );
+      toast.success('Collection order saved');
+      // the menu above is exactly what was saved; asking the shop for it again
+      // could only bring back a cached copy, so only the collections refresh
+      void qc.invalidateQueries({ queryKey: qk.collections });
+      void qc.invalidateQueries({ queryKey: qk.publicCollections });
+    },
   });
 
   const available = useMutation({
@@ -81,7 +101,7 @@ export default function CollectionsList() {
     if (to < 0 || to >= live.length || from === to) return;
     const next = moveItem(live, from, to);
     setOrder([...next, ...order.filter((c) => !c.published)]);
-    reorder.mutate(next.map((c) => c.handle));
+    if (reorder.isError) reorder.reset();
   };
 
   const onDrop = (e: DragEvent, target: AdminCollectionDTO) => {
@@ -134,7 +154,8 @@ export default function CollectionsList() {
                 />
               </div>
               <p className="adm-card__pad adm-field__hint">
-                Every available collection is a category on the shop, in this order. Drag a row to move it; switch one off to take it off the shop
+                Every available collection is a category on the shop, in this order — the first one opens the boutique on the home page. Drag a
+                row (or focus its grip and use the arrow keys) to move it, then <strong>Save order</strong>. Switch one off to take it off the shop
                 without deleting it.
               </p>
               <ErrorBanner error={reorder.error ?? available.error} title="That did not save" />
@@ -216,6 +237,18 @@ export default function CollectionsList() {
           </div>
         )}
       </Card>
+      {canWrite && (
+        <SaveBar
+          dirty={dirty}
+          saving={reorder.isPending}
+          saveLabel="Save order"
+          onSave={() => reorder.mutate(orderLive)}
+          onDiscard={() => {
+            setOrder(saved);
+            reorder.reset();
+          }}
+        />
+      )}
     </>
   );
 }

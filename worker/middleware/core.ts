@@ -23,37 +23,6 @@ export const noStoreByDefault = createMiddleware<AppEnv>(async (c, next) => {
   if (!c.res.headers.has('cache-control')) c.header('cache-control', 'private, no-store');
 });
 
-/**
- * A read-through at the edge for the public catalogue.
- *
- * The storefront asks for the same few URLs again and again; without this each
- * one runs its D1 queries afresh, and D1's free tier counts rows read. The
- * first request for a URL runs the queries and its answer is kept in
- * `caches.default`; the rest, while the answer's own `s-maxage` lasts, are
- * served from the edge and touch the database not at all.
- *
- * It sits outermost, so on a miss it keeps the finished response — security
- * headers and all — and on a hit returns exactly that, before the handler or
- * the database are reached. Only a GET that comes back 200, carries `s-maxage`
- * and sets no cookie is kept: a cart, a checkout or an admin reply is private,
- * uncached (no `s-maxage`), and so can never be served to the wrong person.
- */
-export const edgeRead = createMiddleware<AppEnv>(async (c, next) => {
-  // local dev and the tests want the answer fresh, not a minute stale
-  if (c.req.method !== 'GET' || c.env.APP_ENV === 'development') return next();
-  const cache = caches.default;
-  const key = new Request(c.req.url, { method: 'GET' });
-  const hit = await cache.match(key);
-  if (hit) return hit;
-
-  await next();
-
-  const cc = c.res.headers.get('cache-control') ?? '';
-  if (c.res.status === 200 && cc.includes('s-maxage=') && !c.res.headers.has('set-cookie')) {
-    c.executionCtx.waitUntil(cache.put(key, c.res.clone()));
-  }
-});
-
 /** Headers for JSON and binary API responses (HTML pages set their own CSP). */
 export const apiSecurityHeaders = secureHeaders({
   contentSecurityPolicy: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },

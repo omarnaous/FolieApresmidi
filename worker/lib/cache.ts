@@ -24,14 +24,15 @@ export const cacheTagHeader = (...tags: string[]) => ({ 'cache-tag': [...new Set
  *
  * The storefront is read-mostly and the same few URLs are asked for over and
  * over; without a cache every one runs its D1 queries again, and D1's free
- * tier counts rows read (five million a day). A short window answers the great
- * majority from `caches.default` — see `edgeRead` in worker/middleware/core.ts
- * — and touches the database not at all.
+ * tier counts rows read (five million a day). Workers Caching (`cache.enabled`
+ * in wrangler.jsonc) sits in front of the Worker and answers the great
+ * majority from this window without running it at all; every admin write
+ * purges the tags it touched, so the change shows at once.
  *
- * The window is deliberately short: an admin edit (or a direct change to the
- * database, which purges nothing) shows within a minute, with no tag purge to
- * depend on. `stale-while-revalidate` lets the edge serve the old answer for a
- * breath while it fetches the new one.
+ * Do not add a second cache inside the Worker (`caches.default`): purge() only
+ * reaches Workers Caching, so an inner copy would hand back the old answer
+ * after every save. The window is short so that a direct change to the
+ * database, which purges nothing, still shows within a minute.
  */
 export const PUBLIC_CACHE = 'public, max-age=0, s-maxage=60, stale-while-revalidate=600';
 
