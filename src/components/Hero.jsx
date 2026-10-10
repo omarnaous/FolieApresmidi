@@ -40,17 +40,34 @@ export default function Hero() {
   const [cut] = useState(pickCut);
   const film = useRef(null);
 
-  /* Low Power Mode, and some browsers, refuse to start a film on their own.
-     The still is already on screen, so nothing looks broken — but ask again
-     at the first touch and it plays. */
+  /* iOS starts a film on its own only if it is muted as an attribute, not
+     just as the property React sets — so say so on the element itself. */
   useEffect(() => {
-    const go = () => film.current?.play().catch(() => {});
-    document.addEventListener('touchstart', go, { once: true, passive: true });
-    document.addEventListener('click', go, { once: true });
-    return () => {
-      document.removeEventListener('touchstart', go);
-      document.removeEventListener('click', go);
-    };
+    const el = film.current;
+    if (!el) return;
+    el.muted = true;
+    el.defaultMuted = true;
+    el.setAttribute('muted', '');
+    el.play().catch(() => {});
+  }, [uploaded]);
+
+  /* Low Power Mode refuses every film a page starts on its own, whatever the
+     page does. The still is already on screen, and iOS's own play button is
+     hidden (styles.css), so nothing looks broken — and the first tap, swipe
+     or key anywhere on the page counts as asking, so it plays then. iOS only
+     grants that on the end of a touch, not its start, so listen for both,
+     and keep listening until a play has actually taken. */
+  useEffect(() => {
+    const events = ['touchend', 'pointerup', 'click', 'keydown'];
+    const stop = () => events.forEach((e) => document.removeEventListener(e, go, true));
+    function go() {
+      const el = film.current;
+      if (!el) return;
+      if (!el.paused) return stop();
+      el.play().then(stop, () => {});
+    }
+    events.forEach((e) => document.addEventListener(e, go, { capture: true, passive: true }));
+    return stop;
   }, []);
 
   /* Nothing is decoded while the hero is off screen: the rest of the page

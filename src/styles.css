@@ -2750,7 +2750,21 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 /* ── The opening ────────────────────────────────────────
    The film, the grade over it, and the logo across them —
    the same cut on a phone and on a desk. */
+/* iOS draws its own play button over a film it would not start (Low Power
+   Mode). The film's still is underneath and the first touch plays it, so the
+   button only makes the opening look broken. Nothing can press it anyway:
+   the video takes no pointer events. */
+.hero-vid::-webkit-media-controls,
+.hero-vid::-webkit-media-controls-panel,
+.hero-vid::-webkit-media-controls-play-button,
+.hero-vid::-webkit-media-controls-start-playback-button,
+.hero-vid::-webkit-media-controls-overlay-play-button {
+  display: none !important;
+  -webkit-appearance: none;
+  opacity: 0 !important;
+}
 .hero-vid {
+  pointer-events: none;
   width: 100%;
   height: 100%;
   object-fit: cover;
