@@ -142,6 +142,32 @@ describe('admin catalog', () => {
     expect((await new Shopper().json('GET', '/api/products/la-robe')).status).toBe(404);
   });
 
+  it('files pieces under a category in bulk, and the catalogue and search filter by it', async () => {
+    const a = await createProduct({ title: 'Category striped top' });
+    const b = await createProduct({ title: 'Category wool skirt' });
+    const c = await createProduct({ title: 'Category linen trousers' });
+    const bulk = (ids: string[], category?: string) => owner.json('POST', '/api/admin/products/bulk', { ids, action: 'categorize', category });
+
+    expect((await bulk([a.id])).status).toBe(422); // which category?
+    expect((await bulk([a.id], 'Tops')).data.updated).toBe(1);
+    expect((await bulk([b.id, c.id], 'Bottoms')).data.updated).toBe(2);
+
+    const list = (query: string) => new Shopper().json<ProductListDTO>('GET', `/api/products?q=category&${query}`);
+    const bottoms = await list('type=Bottoms');
+    expect(bottoms.data.items.map((p) => p.title).sort()).toEqual(['Category linen trousers', 'Category wool skirt']);
+    // the chosen category does not hide the others to move to, and the house's order leads
+    expect(bottoms.data.facets.productTypes.map((t) => [t.value, t.count])).toEqual([['Tops', 1], ['Bottoms', 2]]);
+
+    // the category is in the search document: typing it finds the pieces
+    const typed = await new Shopper().json<ProductListDTO>('GET', '/api/products?q=bottoms');
+    expect(typed.data.items.map((p) => p.title).sort()).toEqual(['Category linen trousers', 'Category wool skirt']);
+
+    // and it can be taken off again
+    await bulk([a.id], '');
+    expect((await list('type=Tops')).data.items).toHaveLength(0);
+    expect((await owner.json<AdminProductDTO>('GET', `/api/admin/products/${a.id}`)).data.productType).toBe('');
+  });
+
   it('pairs pieces for shop the look, and suggests some when none are paired', async () => {
     const dress = await createProduct({ title: 'Look dress', productType: 'Dresses' });
     const necklace = await createProduct({ title: 'Look necklace', productType: 'Jewellery' });

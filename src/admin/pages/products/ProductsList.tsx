@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router';
 import {
   imageSrc,
   post,
+  PRODUCT_CATEGORIES,
   PRODUCT_STATUSES,
   type AdminListVariantDTO,
   type AdminProductListItemDTO,
@@ -18,7 +19,7 @@ import { useCan } from '../../lib/session';
 import { plural } from '../../lib/util';
 import { Button, ButtonLink } from '../../ui/Button';
 import { EmptyState, ErrorBanner, ProductStatusBadge, QueryState } from '../../ui/feedback';
-import { MoneyInput, NumberInput, TextInput } from '../../ui/form';
+import { MoneyInput, NumberInput, Select, TextInput } from '../../ui/form';
 import { IconPlus } from '../../ui/icons';
 import { Card, LoadMore, PageHeader, SaveBar } from '../../ui/layout';
 import { ConfirmDialog } from '../../ui/Modal';
@@ -34,6 +35,9 @@ const BULK: Record<BulkAction, { label: string; verb: string }> = {
   archive: { label: 'Archive', verb: 'Archive' },
   delete: { label: 'Delete', verb: 'Delete' },
 };
+
+// the select's value for "clear it" — '' is its resting placeholder
+const NO_CATEGORY = '__none__';
 
 const TABS: TabItem<ProductStatus | 'all'>[] = [
   { value: 'all', label: 'All' },
@@ -86,9 +90,13 @@ export default function ProductsList() {
   const titles = new Map(rows.map((r) => [r.id, r.title]));
 
   const bulk = useMutation({
-    mutationFn: (body: { ids: string[]; action: BulkAction }) => post<{ updated: number }>('/api/admin/products/bulk', body),
+    mutationFn: (body: { ids: string[]; action: BulkAction | 'categorize'; category?: string }) => post<{ updated: number }>('/api/admin/products/bulk', body),
     onSuccess: (res, body) => {
-      toast.success(`${BULK[body.action].verb}: ${plural(res.updated, 'product')}`);
+      toast.success(
+        body.action === 'categorize'
+          ? `${body.category ? `Moved to ${body.category}` : 'Category cleared'}: ${plural(res.updated, 'product')}`
+          : `${BULK[body.action].verb}: ${plural(res.updated, 'product')}`,
+      );
       setSelected(new Set());
       setConfirm(null);
       void qc.invalidateQueries({ queryKey: qk.products });
@@ -177,6 +185,26 @@ export default function ProductsList() {
                 {BULK[a].label}
               </Button>
             ))}
+            <div className="adm-bulkbar__group">
+              <Select
+                label="Set category"
+                labelHidden
+                value=""
+                disabled={bulk.isPending}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v) bulk.mutate({ ids: [...selected], action: 'categorize', category: v === NO_CATEGORY ? '' : v }, { onError: () => toast.error('The category did not save. Try again.') });
+                }}
+              >
+                <option value="">Set category…</option>
+                {PRODUCT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value={NO_CATEGORY}>No category</option>
+              </Select>
+            </div>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear selection
             </Button>
@@ -252,7 +280,7 @@ export default function ProductsList() {
                       </div>
                     ),
                 },
-                { key: 'type', header: 'Type', cell: (p) => p.productType || <span className="adm-muted">—</span>, sort: (a, b) => a.productType.localeCompare(b.productType) },
+                { key: 'type', header: 'Category', cell: (p) => p.productType || <span className="adm-muted">—</span>, sort: (a, b) => a.productType.localeCompare(b.productType) },
                 {
                   key: 'price',
                   header: 'Price',

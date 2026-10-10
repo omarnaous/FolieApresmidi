@@ -26,6 +26,8 @@ import { catalogVersion } from './sync';
 export type ProductQuery = {
   collection?: string;
   q?: string;
+  /** A category — the product type — within the collection or the search. */
+  type?: string;
   option?: string[];
   available?: '1';
   sort?: ProductSort;

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { del, post, put, PRODUCT_STATUSES, type AdminProductDTO, type AdminProductInput, type MediaDTO } from '../../lib/contract';
+import { del, post, put, PRODUCT_CATEGORIES, PRODUCT_STATUSES, type AdminProductDTO, type AdminProductInput, type MediaDTO } from '../../lib/contract';
 import { apiFieldErrors, type FieldErrors } from '../../lib/forms';
 import { PRODUCT_STATUS_META } from '../../lib/format';
 import { useUnsavedChanges } from '../../lib/hooks';
@@ -192,6 +192,24 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
             </Card>
 
             <Card title="Where it belongs">
+              <Select
+                label="Category"
+                hint="The subcollection it is filtered under, in every collection it is in and in the search."
+                value={draft.productType}
+                error={errors.productType}
+                onChange={(e) => set('productType', e.target.value)}
+              >
+                <option value="">No category</option>
+                {PRODUCT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                {/* a type from before the list, or the import: kept as it is */}
+                {draft.productType && !(PRODUCT_CATEGORIES as readonly string[]).includes(draft.productType) && (
+                  <option value={draft.productType}>{draft.productType}</option>
+                )}
+              </Select>
               <Toggle
                 label="An accessory"
                 hint="Shown in the accessories section rather than the boutique, and photographed on grey."

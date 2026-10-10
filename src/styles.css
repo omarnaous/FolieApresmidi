@@ -1583,6 +1583,11 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 }
 .opt.on .opt-dot { box-shadow: 0 0 0 1.5px var(--bone), 0 0 0 2.5px var(--ink); }
 
+/* the subcollections: a row of their own between the collections and the refinements */
+.cat-types { padding-block: 6px 2px; }
+.cat.is-search .cat-types { padding-top: 0; }
+.opt-n { margin-left: -3px; font-size: 8px; letter-spacing: 0.08em; color: var(--ink-45); text-decoration: none; display: inline-block; }
+
 .cat-count { padding-top: 10px; }
 
 .cat-body { flex: 1; overflow-y: auto; padding-block: clamp(24px, 3vw, 40px) clamp(60px, 9vw, 110px); }

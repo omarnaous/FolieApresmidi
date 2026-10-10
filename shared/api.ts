@@ -957,10 +957,21 @@ export interface AdminLookPieceDTO {
   image: MediaDTO | null;
 }
 
-export const BulkProductActionInput = z.object({
-  ids: z.array(zId).min(1).max(500),
-  action: z.enum(['activate', 'draft', 'archive', 'delete']),
-});
+/**
+ * The categories a collection is divided into — its subcollections. A piece
+ * has one (its product type); the catalogue and the search filter by it.
+ * A type outside this list is kept and still filters, it is just not offered.
+ */
+export const PRODUCT_CATEGORIES = ['Tops', 'Bottoms', 'Bralettes', 'Jackets', 'Sets'] as const;
+
+export const BulkProductActionInput = z
+  .object({
+    ids: z.array(zId).min(1).max(500),
+    action: z.enum(['activate', 'draft', 'archive', 'delete', 'categorize']),
+    /** For `categorize`: the category to give them all, '' for none. */
+    category: z.string().trim().max(80).optional(),
+  })
+  .refine((b) => b.action !== 'categorize' || b.category !== undefined, { message: 'Choose a category', path: ['category'] });
 
 export const InventoryAdjustInput = z.object({
   mode: z.enum(['set', 'adjust']),

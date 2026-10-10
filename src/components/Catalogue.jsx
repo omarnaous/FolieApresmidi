@@ -22,9 +22,10 @@ const RELEVANCE = { key: 'relevance', label: 'Relevance' };
 const PAGE = 24;
 
 /** The catalogue's URL for a collection and a set of refinements — the URL is the state. */
-function catalogueUrl(handle, { q, sort, options, available, search }) {
+function catalogueUrl(handle, { q, type, sort, options, available, search }) {
   const p = new URLSearchParams();
   if (q) p.set('q', q);
+  if (type) p.set('type', type);
   if (sort) p.set('sort', sort);
   options.forEach((o) => p.append('option', o));
   if (available) p.set('available', '1');
@@ -53,11 +54,13 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
       q,
       sortParam: params.get('sort'),
       sort: params.get('sort') ?? (q ? 'relevance' : 'featured'),
+      // the subcollection: Tops, Jackets… within the collection, or within the search
+      type: params.get('type') ?? '',
       options: params.getAll('option'),
       available: params.get('available') === '1',
     };
   }, [current]);
-  const { handle, q, sort, sortParam, options, available } = view;
+  const { handle, q, type, sort, sortParam, options, available } = view;
   // the plain search — reached by the search icon — is just a field and its
   // results: no category tabs, no facets, no sort.
   const isSearch = view.base === '/search';
@@ -69,10 +72,10 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
      opens on exactly this view and Back still closes the catalogue. */
   const go = useCallback((next, to = handle) => {
     navigate(
-      catalogueUrl(to, { q, sort: sortParam, options, available, search: isSearch, ...next }),
+      catalogueUrl(to, { q, type, sort: sortParam, options, available, search: isSearch, ...next }),
       { replace: true, state: location.state },
     );
-  }, [navigate, location.state, handle, q, sortParam, options, available, isSearch]);
+  }, [navigate, location.state, handle, q, type, sortParam, options, available, isSearch]);
 
   // the URL moved without us (opened afresh, the back button): the field follows it
   useEffect(() => {
@@ -102,11 +105,12 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   const query = useMemo(() => ({
     collection: handle === 'all' ? undefined : handle,
     q: q || undefined,
+    type: type || undefined,
     option: options.length ? options : undefined,
     available: available ? '1' : undefined,
     sort,
     limit: PAGE,
-  }), [handle, q, options, available, sort]);
+  }), [handle, q, type, options, available, sort]);
 
   // a plain search shows nothing until something is typed — no query, no grid
   const armed = !!current && !(isSearch && !q);
@@ -144,6 +148,15 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     if (!rows.some((t) => t.value === handle) && collection.data) rows.push({ value: handle, label: collection.data.title });
     return rows;
   }, [store?.menu, handle, collection.data]);
+
+  /* The subcollections of what is being looked at — only the ones it has
+     pieces in, in the house's order — plus the one chosen, so it can be undone. */
+  const categories = useMemo(() => {
+    const rows = first?.facets.productTypes ?? [];
+    if (type && !rows.some((r) => r.value.toLowerCase() === type.toLowerCase())) return [...rows, { value: type, count: 0 }];
+    return rows;
+  }, [first, type]);
+  const showCategories = (!isSearch || !!q) && categories.length > 0;
 
   // a colour filter shows its colour: the swatch the pieces carry, else the name if CSS knows it
   const swatches = useMemo(() => {
@@ -213,10 +226,31 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
           <ShelfTabs
             options={tabs}
             value={handle}
-            onChange={(to) => go({ options: [] }, to)}
+            onChange={(to) => go({ options: [], type: '' }, to)}
             controls="cat-results"
             label="Categories"
           />
+        )}
+
+        {showCategories && (
+          <div className="opts cat-types" role="group" aria-label="Category">
+            {[{ value: '', count: null }, ...categories].map((c) => {
+              const on = c.value ? c.value.toLowerCase() === type.toLowerCase() : !type;
+              return (
+                <button
+                  key={c.value || 'all'}
+                  type="button"
+                  className={`opt ${on ? 'on' : ''}`}
+                  aria-pressed={on}
+                  aria-label={c.value ? `${c.value}${c.count ? `, ${c.count} ${c.count === 1 ? 'piece' : 'pieces'}` : ''}` : 'All categories'}
+                  onClick={() => go({ type: c.value })}
+                >
+                  {c.value || 'All'}
+                  {c.count ? <sup className="opt-n">{c.count}</sup> : null}
+                </button>
+              );
+            })}
+          </div>
         )}
 
         {!isSearch && (
@@ -271,11 +305,12 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
         <div className="cat-count label muted" aria-live="polite">
           {list.isPending ? 'Looking…' : `${total} ${total === 1 ? 'piece' : 'pieces'}`}
           {range ? ` · ${range}` : ''}
+          {type ? ` · ${type}` : ''}
           {q ? ` · “${q}”` : ''}
           {suggestions.map((c) => (
             <React.Fragment key={c.handle}>
               {' · '}
-              <button className="label link-u" onClick={() => go({ q: '', options: [], sort: null }, c.handle)}>
+              <button className="label link-u" onClick={() => go({ q: '', type: '', options: [], sort: null }, c.handle)}>
                 {c.title}
               </button>
             </React.Fragment>

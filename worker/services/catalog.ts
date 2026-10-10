@@ -11,7 +11,7 @@ import type {
   SearchSuggestDTO,
   VariantDTO,
 } from '../../shared/api';
-import { LOOK_MAX } from '../../shared/api';
+import { LOOK_MAX, PRODUCT_CATEGORIES } from '../../shared/api';
 import { schema, type DB } from '../db/client';
 import { chunk, mediaById, toMediaDTO } from './media';
 import { sellable, stockFor } from './inventory';
@@ -314,6 +314,7 @@ export async function listProducts(db: DB, p: ListParams): Promise<ProductListDT
   if (p.q && !fts) return { items: [], nextCursor: null, total: 0, facets: { options: [], productTypes: [], price: null } };
 
   const base = baseWhere(p, fts);
+  const typeScope = p.type ? baseWhere({ ...p, type: undefined }, fts) : base;
   const where = narrowWhere(p, base);
   const whereSql = where.sql.join(' AND ');
 
@@ -370,9 +371,11 @@ export async function listProducts(db: DB, p: ListParams): Promise<ProductListDT
             GROUP BY lower(o.name), value ORDER BY lower(o.name), pos, value LIMIT 300`,
         )
         .bind(...base.params),
+      // the categories leave the chosen one out of their own scope, so picking
+      // Jackets still lists Tops and the rest to move to
       d1
-        .prepare(`SELECT p.product_type AS value, COUNT(*) AS count FROM products p WHERE ${base.sql.join(' AND ')} AND p.product_type != '' GROUP BY p.product_type ORDER BY count DESC`)
-        .bind(...base.params),
+        .prepare(`SELECT p.product_type AS value, COUNT(*) AS count FROM products p WHERE ${typeScope.sql.join(' AND ')} AND p.product_type != '' GROUP BY p.product_type ORDER BY count DESC`)
+        .bind(...typeScope.params),
       d1
         .prepare(`SELECT MIN(mp) AS min, MAX(mp) AS max FROM (SELECT (SELECT MIN(v.price_amount) FROM variants v WHERE v.product_id = p.id) AS mp FROM products p WHERE ${base.sql.join(' AND ')})`)
         .bind(...base.params),
@@ -399,10 +402,17 @@ export async function listProducts(db: DB, p: ListParams): Promise<ProductListDT
     total: Number((count?.results?.[0] as { n?: number } | undefined)?.n ?? 0),
     facets: {
       options: [...optionMap.values()],
-      productTypes: (typeFacets?.results ?? []) as { value: string; count: number }[],
+      productTypes: sortCategories((typeFacets?.results ?? []) as { value: string; count: number }[]),
       price: price && price.min !== null && price.max !== null ? { min: price.min, max: price.max } : null,
     },
   };
+}
+
+/** The house's categories in the house's order, then any other type by size. */
+const CATEGORY_RANK = new Map(PRODUCT_CATEGORIES.map((c, i) => [c.toLowerCase(), i]));
+function sortCategories(rows: { value: string; count: number }[]) {
+  const rank = (v: string) => CATEGORY_RANK.get(v.toLowerCase()) ?? PRODUCT_CATEGORIES.length;
+  return [...rows].sort((a, b) => rank(a.value) - rank(b.value) || b.count - a.count || a.value.localeCompare(b.value));
 }
 
 /**

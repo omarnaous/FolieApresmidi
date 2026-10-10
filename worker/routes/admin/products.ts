@@ -25,7 +25,7 @@ import { json, query } from '../../lib/validate';
 import { staffOnly } from '../../middleware/session';
 import { adminProductDTO, adminProductListItems, deleteProductStatements, saveProductCore } from '../../services/admin-products';
 import { audit } from '../../services/audit';
-import { decodeCursor, encodeCursor } from '../../services/catalog';
+import { decodeCursor, encodeCursor, reindexStatements } from '../../services/catalog';
 import { rematerializeForProducts } from '../../services/collections';
 import { adjustStatements } from '../../services/inventory';
 import { toMediaDTO } from '../../services/media';
@@ -269,7 +269,7 @@ adminProducts.get('/imports/:id', staffOnly('products:read'), async (c) => {
 /* ─────────── bulk ─────────── */
 
 adminProducts.post('/products/bulk', staffOnly('products:write'), json(BulkProductActionInput), async (c) => {
-  const { ids, action } = c.req.valid('json');
+  const { ids, action, category } = c.req.valid('json');
   const d1 = c.env.DB;
   const now = Date.now();
   let updated = 0;
@@ -279,6 +279,13 @@ adminProducts.post('/products/bulk', staffOnly('products:write'), json(BulkProdu
     if (action === 'delete') {
       await d1.batch(deleteProductStatements(d1, part));
       updated += part.length;
+    } else if (action === 'categorize') {
+      // the category is part of each piece's search document, so it is rebuilt with it
+      const [res] = await d1.batch([
+        d1.prepare(`UPDATE products SET product_type = ?, updated_at = ? WHERE id IN (${marks})`).bind(category ?? '', now, ...part),
+        ...reindexStatements(d1, part),
+      ]);
+      updated += res?.meta.changes ?? 0;
     } else {
       const status = action === 'activate' ? 'active' : action === 'draft' ? 'draft' : 'archived';
       const res = await d1
@@ -290,7 +297,14 @@ adminProducts.post('/products/bulk', staffOnly('products:write'), json(BulkProdu
   }
   if (action !== 'delete') await rematerializeForProducts(d1, ids);
   purgeProducts(c.executionCtx, ids);
-  await audit(c, `product.bulk_${action}`, 'product', null, `${action} ${ids.length} products`, { ids });
+  await audit(
+    c,
+    `product.bulk_${action}`,
+    'product',
+    null,
+    action === 'categorize' ? `Category set to "${category || 'none'}" on ${ids.length} products` : `${action} ${ids.length} products`,
+    { ids },
+  );
   return c.json({ updated });
 });
 
