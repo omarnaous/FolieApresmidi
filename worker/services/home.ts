@@ -13,6 +13,8 @@ interface StoredFloor {
   name: string;
   line: string | null;
   collectionHandle: string | null;
+  /** Absent in a document saved before floors had categories. */
+  category?: string | null;
   imageMediaId: string | null;
 }
 
@@ -130,6 +132,7 @@ export const homeFromInput = (input: HomeInput): Home => ({
     name: f.name,
     line: f.line ?? null,
     collectionHandle: f.collectionHandle,
+    category: f.category ?? null,
     imageMediaId: f.imageMediaId,
   })),
   boutique: { heading: input.boutique?.heading ?? null, intro: input.boutique?.intro ?? null },
@@ -182,12 +185,48 @@ async function collectionCovers(d1: D1Database, handles: string[]): Promise<Map<
   return covers;
 }
 
+/**
+ * A category floor's picture: the first image of the first active piece of
+ * that category, within the floor's collection when it has one. One query
+ * per such floor, in a single batch.
+ */
+async function categoryCovers(d1: D1Database, floors: StoredFloor[]): Promise<(string | null)[]> {
+  const wanted = floors.map((f, i) => ({ f, i })).filter(({ f }) => !!f.category);
+  const out: (string | null)[] = floors.map(() => null);
+  if (!wanted.length) return out;
+  const res = await d1.batch<{ media_id: string }>(
+    wanted.map(({ f }) =>
+      d1
+        .prepare(
+          `SELECT pm.media_id
+             FROM products p
+             JOIN product_media pm ON pm.product_id = p.id
+             ${f.collectionHandle ? 'JOIN collection_products cp ON cp.product_id = p.id JOIN collections c ON c.id = cp.collection_id AND c.handle = ?' : ''}
+            WHERE p.status = 'active' AND lower(p.product_type) = lower(?)
+            ORDER BY ${f.collectionHandle ? 'cp.position, ' : ''}p.position, pm.position
+            LIMIT 1`,
+        )
+        .bind(...(f.collectionHandle ? [f.collectionHandle] : []), f.category!),
+    ),
+  );
+  wanted.forEach(({ i }, n) => (out[i] = res[n]?.results?.[0]?.media_id ?? null));
+  return out;
+}
+
 async function resolveFloors(d1: D1Database, floors: StoredFloor[]) {
-  const covers = await collectionCovers(d1, floors.flatMap((f) => (f.collectionHandle ? [f.collectionHandle] : [])));
-  const media = await mediaByIdsRaw(d1, [...floors.flatMap((f) => (f.imageMediaId ? [f.imageMediaId] : [])), ...covers.values()]);
-  return floors.map((f) => {
+  const [covers, catCovers] = await Promise.all([
+    collectionCovers(d1, floors.flatMap((f) => (f.collectionHandle && !f.category ? [f.collectionHandle] : []))),
+    categoryCovers(d1, floors),
+  ]);
+  const media = await mediaByIdsRaw(d1, [
+    ...floors.flatMap((f) => (f.imageMediaId ? [f.imageMediaId] : [])),
+    ...covers.values(),
+    ...catCovers.filter((id): id is string => !!id),
+  ]);
+  return floors.map((f, i) => {
     const chosen = f.imageMediaId ? media.get(f.imageMediaId) ?? null : null;
-    const coverId = f.collectionHandle ? covers.get(f.collectionHandle) : undefined;
+    // without its own image a floor shows its category's first piece, else its collection's picture
+    const coverId = f.category ? catCovers[i] ?? undefined : f.collectionHandle ? covers.get(f.collectionHandle) : undefined;
     const fallback: MediaDTO | null = coverId ? media.get(coverId) ?? null : null;
     return { floor: f, chosen, fallback };
   });
@@ -235,6 +274,7 @@ export async function homeDTO(d1: D1Database, home: Home): Promise<HomeDTO> {
     name: floor.name,
     line: floor.line,
     collectionHandle: floor.collectionHandle,
+    category: floor.category ?? null,
     image: chosen ?? fallback,
   }));
   return { ...common(home, notebook, video, lookbook), floors };
@@ -250,6 +290,7 @@ export async function adminHomeDTO(d1: D1Database, home: Home, updatedAt: number
     name: floor.name,
     line: floor.line,
     collectionHandle: floor.collectionHandle,
+    category: floor.category ?? null,
     image: chosen,
     fallback,
   }));

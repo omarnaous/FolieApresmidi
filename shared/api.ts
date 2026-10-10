@@ -203,6 +203,8 @@ export interface FloorDTO {
   line: string | null;
   /** Where the floor leads; null = all products. */
   collectionHandle: string | null;
+  /** The subcollection it opens on within that — a product type such as Tops; null = every piece. */
+  category: string | null;
   /** The image chosen in the admin, or else the collection's own picture. */
   image: MediaDTO | null;
 }
@@ -1564,6 +1566,7 @@ export const HomeInput = z.object({
         name: z.string().trim().min(1, 'Required').max(30),
         line: z.string().trim().max(120).nullish().transform((v) => v || null),
         collectionHandle: zHandle.nullable(),
+        category: z.string().trim().max(80).nullish().transform((v) => v || null),
         imageMediaId: zId.nullable(),
       }),
     )

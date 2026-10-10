@@ -137,7 +137,11 @@ export default function App() {
   );
   // piece to piece inside the product page, so Close leaves all of them at once
   const openRelated = useCallback((product) => sheetNavigate(`/products/${product.handle}`), [sheetNavigate]);
-  const openCatalogue = useCallback((handle) => navigate(`/collections/${handle ?? 'all'}`), [navigate]);
+  const openCatalogue = useCallback(
+    (handle, type) =>
+      navigate(`/collections/${handle ?? 'all'}${typeof type === 'string' && type ? `?type=${encodeURIComponent(type)}` : ''}`),
+    [navigate],
+  );
   const openSearch = useCallback(() => navigate('/search'), [navigate]);
 
   const closeBag = useCallback(() => {

@@ -6,6 +6,7 @@ import {
   MAX_FLOORS,
   MAX_LOOKBOOK,
   MAX_POPUPS,
+  PRODUCT_CATEGORIES,
   put,
   type AdminHomeDTO,
   type HomeSectionKey,
@@ -49,6 +50,7 @@ interface FloorRow {
   name: string;
   line: string;
   collectionHandle: string | null;
+  category: string | null;
   image: MediaDTO | null;
 }
 
@@ -87,7 +89,7 @@ const fromDTO = (h: AdminHomeDTO): HomeDraft => ({
   ribbon: h.ribbon,
   heading: h.maison.heading,
   intro: h.maison.intro ?? '',
-  floors: h.floors.map((f) => ({ key: clientKey('f'), name: f.name, line: f.line ?? '', collectionHandle: f.collectionHandle, image: f.image })),
+  floors: h.floors.map((f) => ({ key: clientKey('f'), name: f.name, line: f.line ?? '', collectionHandle: f.collectionHandle, category: f.category, image: f.image })),
   boutiqueHeading: h.boutique.heading ?? '',
   boutiqueIntro: h.boutique.intro ?? '',
   accessoriesHeading: h.accessories.heading,
@@ -131,9 +133,11 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
   const dirty = !sameJson(base, draft);
   useUnsavedChanges(dirty);
 
-  // what a floor shows without its own image, as of the last save
+  // what a floor shows without its own image, as of the last save — the
+  // category's first piece, or the collection's picture
+  const fallbackKey = (f: { collectionHandle: string | null; category: string | null }) => `${f.collectionHandle ?? ''}|${f.category ?? ''}`;
   const fallbacks = useMemo(
-    () => new Map(saved.floors.flatMap((f) => (f.collectionHandle && f.fallback ? [[f.collectionHandle, f.fallback] as const] : []))),
+    () => new Map(saved.floors.flatMap((f) => (f.fallback ? [[fallbackKey(f), f.fallback] as const] : []))),
     [saved],
   );
 
@@ -168,6 +172,7 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
         name: f.name,
         line: f.line.trim() || null,
         collectionHandle: f.collectionHandle,
+        category: f.category,
         imageMediaId: f.image?.id ?? null,
       })),
       boutique: { heading: draft.boutiqueHeading.trim() || null, intro: draft.boutiqueIntro.trim() || null },
@@ -204,7 +209,7 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
   const number = numbers(draft.sections);
   /** "04 — Accessories", or "Accessories (switched off)" while it is hidden. */
   const cardTitle = (key: HomeSectionKey, name: string) => (number[key] ? `${number[key]} — ${name}` : `${name} (switched off)`);
-  const addFloor = () => set('floors', [...draft.floors, { key: clientKey('f'), name: '', line: '', collectionHandle: null, image: null }]);
+  const addFloor = () => set('floors', [...draft.floors, { key: clientKey('f'), name: '', line: '', collectionHandle: null, category: null, image: null }]);
   const addPopUp = () => set('popups', [...draft.popups, { key: clientKey('p'), place: '', city: '', dates: '', time: '', status: 'open' }]);
   const setPopUp = (key: string, patch: Partial<PopUpRow>) => set('popups', draft.popups.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   // what the boutique is called today, so the empty title field can show it
@@ -315,7 +320,7 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
           }
         >
           <p className="adm-field__hint">
-            The lift directory in {maisonName}, first floor first. Each floor opens its collection. Without an image of its own, a floor shows its collection’s picture.
+            The lift directory in {maisonName}, first floor first. Each floor opens its collection on its subcollection — Tops, Jackets… Without an image of its own, a floor shows the first piece in it.
           </p>
           {errors.floors && <p className="adm-field__error">{errors.floors}</p>}
           {draft.floors.length === 0 ? (
@@ -332,8 +337,8 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
                         label="Image"
                         value={f.image}
                         onChange={(m) => setFloor(f.key, { image: m })}
-                        fallback={f.collectionHandle ? fallbacks.get(f.collectionHandle) ?? null : null}
-                        fallbackHint={f.collectionHandle ? 'Using the collection’s picture.' : undefined}
+                        fallback={fallbacks.get(fallbackKey(f)) ?? null}
+                        fallbackHint={f.category ? `Using the first piece in ${f.category}.` : f.collectionHandle ? 'Using the collection’s picture.' : undefined}
                       />
                       {errors[`floors.${i}.imageMediaId`] && <p className="adm-field__error">{errors[`floors.${i}.imageMediaId`]}</p>}
                     </div>
@@ -356,6 +361,20 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
                           error={errors[`floors.${i}.collectionHandle`]}
                           onChange={(v) => setFloor(f.key, { collectionHandle: v || null })}
                         />
+                        <Select
+                          label="Subcollection"
+                          value={f.category ?? ''}
+                          error={errors[`floors.${i}.category`]}
+                          onChange={(e) => setFloor(f.key, { category: e.target.value || null })}
+                        >
+                          <option value="">Every piece</option>
+                          {PRODUCT_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                          {f.category && !(PRODUCT_CATEGORIES as readonly string[]).includes(f.category) && <option value={f.category}>{f.category}</option>}
+                        </Select>
                       </div>
                       <TextInput
                         label="Line"

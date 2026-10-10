@@ -11,14 +11,15 @@ const DOORS_SHUT_MS = 330;
 const RIDE_MS = 900;
 
 const pad = (n) => String(n).padStart(2, '0');
-const hrefOf = (f) => `/collections/${f.collectionHandle ?? 'all'}`;
+const hrefOf = (f) =>
+  `/collections/${f.collectionHandle ?? 'all'}${f.category ? `?type=${encodeURIComponent(f.category)}` : ''}`;
 
 const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Maison FDM: the house as a lift directory. Each floor is a collection the
- * owner names and pictures in the admin. Choosing a floor calls the car —
+ * Maison FDM: the house as a lift directory. Each floor is a collection, or
+ * one of its categories, that the owner names and pictures in the admin. Choosing a floor calls the car —
  * the doors close over the plate, the picture changes behind them, and they
  * part on the new floor. Choosing the floor you are on steps out into it.
  */
@@ -54,7 +55,8 @@ export default function Maison({ onOpen }) {
     ];
   };
 
-  const enter = (f) => onOpen?.(f.collectionHandle ?? null);
+  // a floor opens its collection on its category: Tops, Jackets…
+  const enter = (f) => onOpen?.(f.collectionHandle ?? null, f.category ?? null);
 
   return (
     <section className="section shell tight-top" id="maison">

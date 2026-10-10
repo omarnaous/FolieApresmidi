@@ -370,6 +370,31 @@ describe('home page content', () => {
     expect(store.data.home.floors.map((f) => f.name)).toEqual(['Tops', 'Bottoms', 'Bralettes', 'Accessories']);
   });
 
+  it('opens a floor on its subcollection, pictured by its first piece until one is chosen', async () => {
+    // a Tops piece that comes first in the house's order, with a picture
+    const top = await createProduct({ title: 'Floor silk top', productType: 'Tops' });
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO media (id, r2_key, mime, alt, created_at) VALUES ('floor-top-pic', 'products/floor-top.jpg', 'image/jpeg', '', ?)`).bind(now),
+      env.DB.prepare(`INSERT INTO product_media (product_id, media_id, position) VALUES (?, 'floor-top-pic', 0)`).bind(top.id),
+      env.DB.prepare(`UPDATE products SET position = -1000 WHERE id = ?`).bind(top.id),
+    ]);
+    const saved = await owner.json<AdminHomeDTO>('PUT', '/api/admin/home', home([
+      { name: 'Tops', collectionHandle: null, category: 'Tops', imageMediaId: null },
+      { name: 'Everything', collectionHandle: null, imageMediaId: null },
+    ]));
+    expect(saved.status).toBe(200);
+    expect(saved.data.floors.map((f) => f.category)).toEqual(['Tops', null]);
+    expect(saved.data.floors[0]!.image).toBeNull();
+    expect(saved.data.floors[0]!.fallback?.id).toBe('floor-top-pic');
+
+    const store = await new Shopper().json<StoreDTO>('GET', '/api/store');
+    expect(store.data.home.floors[0]).toMatchObject({ name: 'Tops', category: 'Tops' });
+    expect(store.data.home.floors[0]!.image?.id).toBe('floor-top-pic');
+
+    await owner.json('PUT', '/api/admin/home', home([{ name: 'Tops', collectionHandle: null, imageMediaId: null }]));
+  });
+
   it('switches a section off the page and back on', async () => {
     const hidden = sections('Maison FDM').map((s) => (s.key === 'popups' ? { ...s, visible: false } : s));
     const off = await owner.json<AdminHomeDTO>('PUT', '/api/admin/home', {
@@ -509,8 +534,8 @@ describe('home page content', () => {
     // an empty subtitle is stored as none
     expect(store.data.home.accessories).toEqual({ heading: 'Small things, *said loudly*', intro: null });
     expect(store.data.home.floors).toEqual([
-      { name: 'Tops', line: 'First floor', collectionHandle: 'floor-tops', image: expect.objectContaining({ id: 'm-cover', url: '/media/products/test/cover.jpg' }) },
-      { name: 'Everything', line: null, collectionHandle: null, image: expect.objectContaining({ id: 'm-chosen' }) },
+      { name: 'Tops', line: 'First floor', collectionHandle: 'floor-tops', category: null, image: expect.objectContaining({ id: 'm-cover', url: '/media/products/test/cover.jpg' }) },
+      { name: 'Everything', line: null, collectionHandle: null, category: null, image: expect.objectContaining({ id: 'm-chosen' }) },
     ]);
 
     const again = await owner.json<AdminHomeDTO>('GET', '/api/admin/home');
