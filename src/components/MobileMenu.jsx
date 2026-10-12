@@ -4,6 +4,7 @@ import { FEED, post } from '../data/assets';
 import { useCart } from '../store/cart';
 import { useSections } from '../data/sections';
 import { useStore } from '../lib/queries';
+import { categoryPath } from '../lib/catalog';
 import { instagramHandle } from '../lib/store';
 
 const STRIP = FEED.slice(0, 3);
@@ -61,7 +62,8 @@ export default function MobileMenu({ open, onClose, onAll }) {
           {categories.length > 0 && (
             <div className="menu-sub-cats">
               {categories.map((name) => {
-                const path = `/collections/all?type=${encodeURIComponent(name)}`;
+                // in the first collection on the menu, filtered to it
+                const path = categoryPath(store, name);
                 return (
                   <a key={name} href={path} onClick={to(path)}>{name}</a>
                 );

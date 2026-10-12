@@ -61,3 +61,14 @@ export function optionSummary(options: { name: string; value: string }[]): strin
 
 /** "Small / Red" → "Small · Red", for lines that only carry the variant title. */
 export const variantLabel = (title: string) => (title === 'Default Title' ? '' : title.split(' / ').join(' · '));
+
+/** The first collection in the owner's order — where a subcollection opens when no collection is named. */
+export const firstCollection = (store: StoreDTO | null | undefined): string | null =>
+  store?.menu.find((m) => m.collectionHandle)?.collectionHandle ?? null;
+
+/**
+ * Where a subcollection (Sets, Jackets…) opens: the named collection, else the
+ * first one on the menu, filtered to it. With no collection at all, every piece.
+ */
+export const categoryPath = (store: StoreDTO | null | undefined, name: string, collection?: string | null): string =>
+  `/collections/${collection ?? firstCollection(store) ?? 'all'}?type=${encodeURIComponent(name)}`;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useCart } from '../store/cart';
 import { useSections } from '../data/sections';
 import { useStore } from '../lib/queries';
+import { categoryPath } from '../lib/catalog';
 
 /* Thin, quiet line icons — the house's own weight, drawn to sit either side
    of the mark without shouting. */
@@ -87,7 +88,8 @@ export default function Nav({ onMenu, menuOpen, onSearch, page }) {
                   ))}
                   {categories.length > 0 && <span className="nav-drop-rule" role="separator" />}
                   {categories.map((name) => {
-                    const to = `/collections/all?type=${encodeURIComponent(name)}`;
+                    // in the first collection on the menu, filtered to it
+                    const to = categoryPath(store, name);
                     return (
                       <a key={name} className="nav-drop-item" href={to} onClick={go(to)} role="menuitem">
                         {name}

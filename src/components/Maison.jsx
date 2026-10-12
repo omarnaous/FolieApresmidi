@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Reveal from './Reveal';
 import { imageSrc } from '../../shared/api';
 import { useEyebrow } from '../data/sections';
-import { srcSet } from '../lib/catalog';
+import { categoryPath, firstCollection, srcSet } from '../lib/catalog';
 import { useStore } from '../lib/queries';
 import { emphasis } from '../lib/emphasis';
 
@@ -11,8 +11,6 @@ const DOORS_SHUT_MS = 330;
 const RIDE_MS = 900;
 
 const pad = (n) => String(n).padStart(2, '0');
-const hrefOf = (f) =>
-  `/collections/${f.collectionHandle ?? 'all'}${f.category ? `?type=${encodeURIComponent(f.category)}` : ''}`;
 
 const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -28,6 +26,8 @@ export default function Maison({ onOpen }) {
   const { data: store } = useStore();
   const home = store?.home;
   const floors = home?.floors ?? [];
+  // a subcollection floor that names no collection opens in the first one on the menu
+  const hrefOf = (f) => (f.category ? categoryPath(store, f.category, f.collectionHandle) : `/collections/${f.collectionHandle ?? 'all'}`);
 
   const [at, setAt] = useState(0);        // the lit button
   const [shown, setShown] = useState(0);  // the picture behind the doors
@@ -56,7 +56,7 @@ export default function Maison({ onOpen }) {
   };
 
   // a floor opens its collection on its category: Tops, Jackets…
-  const enter = (f) => onOpen?.(f.collectionHandle ?? null, f.category ?? null);
+  const enter = (f) => onOpen?.(f.category ? f.collectionHandle ?? firstCollection(store) : f.collectionHandle ?? null, f.category ?? null);
 
   return (
     <section className="section shell tight-top" id="maison">
