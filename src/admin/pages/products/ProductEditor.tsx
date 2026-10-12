@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { del, post, put, PRODUCT_CATEGORIES, PRODUCT_STATUSES, type AdminProductDTO, type AdminProductInput, type MediaDTO } from '../../lib/contract';
+import { del, post, put, PRODUCT_STATUSES, type AdminProductDTO, type AdminProductInput, type MediaDTO } from '../../lib/contract';
 import { apiFieldErrors, type FieldErrors } from '../../lib/forms';
 import { PRODUCT_STATUS_META } from '../../lib/format';
 import { useUnsavedChanges } from '../../lib/hooks';
-import { qk, useCollections, useProduct, useStore } from '../../lib/queries';
+import { qk, useCategoryNames, useCollections, useProduct, useStore } from '../../lib/queries';
 import { useCan } from '../../lib/session';
 import { sameJson, slugify } from '../../lib/util';
 import { Button, ButtonLink } from '../../ui/Button';
@@ -52,6 +52,7 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
   const isNew = !product;
   const can = useCan();
   const canWrite = can('products:write');
+  const categories = useCategoryNames();
   const qc = useQueryClient();
   const toast = useToast();
   const navigate = useNavigate();
@@ -200,13 +201,13 @@ function ProductForm({ product, currency }: { product: AdminProductDTO | null; c
                 onChange={(e) => set('productType', e.target.value)}
               >
                 <option value="">No category</option>
-                {PRODUCT_CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
                 {/* a type from before the list, or the import: kept as it is */}
-                {draft.productType && !(PRODUCT_CATEGORIES as readonly string[]).includes(draft.productType) && (
+                {draft.productType && !categories.includes(draft.productType) && (
                   <option value={draft.productType}>{draft.productType}</option>
                 )}
               </Select>

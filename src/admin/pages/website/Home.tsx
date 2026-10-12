@@ -6,7 +6,6 @@ import {
   MAX_FLOORS,
   MAX_LOOKBOOK,
   MAX_POPUPS,
-  PRODUCT_CATEGORIES,
   put,
   type AdminHomeDTO,
   type HomeSectionKey,
@@ -15,7 +14,7 @@ import {
 } from '../../lib/contract';
 import { apiFieldErrors, validate, type FieldErrors } from '../../lib/forms';
 import { useUnsavedChanges } from '../../lib/hooks';
-import { qk, useHome, usePublicCollections } from '../../lib/queries';
+import { qk, useCategoryNames, useHome, usePublicCollections } from '../../lib/queries';
 import { clientKey, moveItem, sameJson } from '../../lib/util';
 import { Button, IconButton } from '../../ui/Button';
 import { CollectionSelect } from '../../ui/CollectionSelect';
@@ -141,6 +140,7 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
     [saved],
   );
 
+  const categories = useCategoryNames();
   const set = <K extends keyof HomeDraft>(k: K, v: HomeDraft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const setSection = (key: HomeSectionKey, patch: Partial<SectionRow>) =>
     set('sections', draft.sections.map((s) => (s.key === key ? { ...s, ...patch } : s)));
@@ -368,12 +368,12 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
                           onChange={(e) => setFloor(f.key, { category: e.target.value || null })}
                         >
                           <option value="">Every piece</option>
-                          {PRODUCT_CATEGORIES.map((c) => (
+                          {categories.map((c) => (
                             <option key={c} value={c}>
                               {c}
                             </option>
                           ))}
-                          {f.category && !(PRODUCT_CATEGORIES as readonly string[]).includes(f.category) && <option value={f.category}>{f.category}</option>}
+                          {f.category && !categories.includes(f.category) && <option value={f.category}>{f.category}</option>}
                         </Select>
                       </div>
                       <TextInput

@@ -13,6 +13,7 @@ import { TextInput, Toggle } from '../../ui/form';
 import { IconMenu, IconPlus } from '../../ui/icons';
 import { Card, PageHeader, SaveBar } from '../../ui/layout';
 import { useToast } from '../../ui/Toasts';
+import { SubcollectionsCard } from './SubcollectionsCard';
 
 /**
  * Every collection, in the order they stand on the shop. Drag a row by its
@@ -233,6 +234,7 @@ export default function CollectionsList() {
           </div>
         )}
       </Card>
+      <SubcollectionsCard canWrite={canWrite} />
       {canWrite && (
         <SaveBar
           dirty={dirty}

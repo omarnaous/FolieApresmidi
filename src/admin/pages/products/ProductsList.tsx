@@ -4,7 +4,6 @@ import { Link, useSearchParams } from 'react-router';
 import {
   imageSrc,
   post,
-  PRODUCT_CATEGORIES,
   PRODUCT_STATUSES,
   type AdminListVariantDTO,
   type AdminProductListItemDTO,
@@ -14,7 +13,7 @@ import {
 } from '../../lib/contract';
 import { PRODUCT_STATUS_META } from '../../lib/format';
 import { useDebounced, useUnsavedChanges } from '../../lib/hooks';
-import { qk, useCurrency, useFormatMoney, usePaged } from '../../lib/queries';
+import { qk, useCategoryNames, useCurrency, useFormatMoney, usePaged } from '../../lib/queries';
 import { useCan } from '../../lib/session';
 import { plural } from '../../lib/util';
 import { Button, ButtonLink } from '../../ui/Button';
@@ -101,11 +100,13 @@ export default function ProductsList() {
       setConfirm(null);
       void qc.invalidateQueries({ queryKey: qk.products });
       void qc.invalidateQueries({ queryKey: qk.collections });
+      void qc.invalidateQueries({ queryKey: qk.categories });
       void qc.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
     },
   });
 
   const canWrite = can('products:write');
+  const categories = useCategoryNames();
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
   const variantsById = useMemo(() => new Map(rows.flatMap((r) => r.variants.map((v) => [v.id, v] as const))), [rows]);
@@ -197,7 +198,7 @@ export default function ProductsList() {
                 }}
               >
                 <option value="">Set category…</option>
-                {PRODUCT_CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>

@@ -31,6 +31,8 @@ export const storeSettings = sqliteTable(
     address: text('address'),
     logoMediaId: text('logo_media_id'),
     menuJson: text('menu_json').notNull().default('[]'),
+    /** the subcollections, in order: `["Tops", "Bottoms", …]`; `[]` means the built-in list */
+    categoriesJson: text('categories_json').notNull().default('[]'),
     /** Home page copy the owner edits (section names, the Maison floors); `{}` means the built-in defaults. */
     homeJson: text('home_json').notNull().default('{}'),
     /** the size chart shown on every product with sizes */

@@ -3,9 +3,11 @@ import {
   AdminProductInput,
   AdminProductListQuery,
   BulkProductActionInput,
+  CategoriesInput,
   InventoryAdjustInput,
   MediaUpdateInput,
   QuickEditInput,
+  type AdminCategoryDTO,
   type CsvImportDTO,
   type InventoryAdjustmentDTO,
   type MediaDTO,
@@ -16,7 +18,7 @@ import { parseJson } from '../../db/client';
 import { enqueue } from '../../jobs/messages';
 import { imagesBinding, mediaBucket } from '../../lib/bindings';
 import { canStoreMedia, putMedia } from '../../lib/media-store';
-import { purgeProducts } from '../../lib/cache';
+import { purge, purgeProducts, TAGS } from '../../lib/cache';
 import { csvLine } from '../../lib/csv';
 import { AppError, constraintName, invalid, notFound } from '../../lib/errors';
 import { ulid } from '../../lib/ids';
@@ -29,7 +31,7 @@ import { decodeCursor, encodeCursor, reindexStatements } from '../../services/ca
 import { rematerializeForProducts } from '../../services/collections';
 import { adjustStatements } from '../../services/inventory';
 import { toMediaDTO } from '../../services/media';
-import { getSettings } from '../../services/settings';
+import { getSettings, readCategories } from '../../services/settings';
 import type { AppEnv } from '../../types';
 
 export const adminProducts = new Hono<AppEnv>();
@@ -264,6 +266,80 @@ adminProducts.get('/imports/:id', staffOnly('products:read'), async (c) => {
     finishedAt: (row.finished_at as number | null) ?? null,
   };
   return c.json(body);
+});
+
+/* ─────────── subcollections ─────────── */
+
+async function categoriesBody(d1: D1Database): Promise<{ items: AdminCategoryDTO[] }> {
+  const [settings, counts] = await d1.batch<Record<string, unknown>>([
+    d1.prepare('SELECT categories_json FROM store_settings WHERE id = 1'),
+    d1.prepare(`SELECT lower(product_type) AS name, COUNT(*) AS n FROM products WHERE product_type != '' GROUP BY lower(product_type)`),
+  ]);
+  const names = readCategories((settings?.results?.[0] as { categories_json?: string } | undefined)?.categories_json);
+  const by = new Map(((counts?.results ?? []) as { name: string; n: number }[]).map((r) => [r.name, r.n]));
+  return { items: names.map((name) => ({ name, count: by.get(name.toLowerCase()) ?? 0 })) };
+}
+
+adminProducts.get('/categories', staffOnly('products:read'), async (c) => c.json(await categoriesBody(c.env.DB)));
+
+/**
+ * Save the subcollections. A renamed one is renamed on every piece and Maison
+ * floor that has it; one taken out of the list is taken off its pieces and
+ * floors. Renames go through a placeholder, so two names can swap.
+ */
+adminProducts.put('/categories', staffOnly('products:write'), json(CategoriesInput), async (c) => {
+  const { categories } = c.req.valid('json');
+  const d1 = c.env.DB;
+  const now = Date.now();
+  const row = await d1.prepare('SELECT categories_json, home_json FROM store_settings WHERE id = 1').first<{ categories_json: string; home_json: string }>();
+  const current = readCategories(row?.categories_json);
+  const lower = (v: string) => v.toLowerCase();
+
+  const renames = categories.filter((k) => k.previous && k.previous !== k.name).map((k) => ({ from: k.previous!, to: k.name }));
+  const kept = new Set(categories.flatMap((k) => [lower(k.name), ...(k.previous ? [lower(k.previous)] : [])]));
+  const removed = current.filter((n) => !kept.has(lower(n)));
+  const touched = [...renames.map((r) => r.from), ...removed];
+
+  const affected = touched.length
+    ? (
+        await d1
+          .prepare(`SELECT id FROM products WHERE lower(product_type) IN (${touched.map(() => '?').join(',')})`)
+          .bind(...touched.map(lower))
+          .all<{ id: string }>()
+      ).results.map((r) => r.id)
+    : [];
+
+  // the Maison floors name a subcollection too
+  const home = parseJson<{ floors?: { category?: string | null }[] }>(row?.home_json ?? '{}', {});
+  const floorTo = (cat: string | null | undefined) => {
+    if (!cat) return cat ?? null;
+    const rename = renames.find((r) => lower(r.from) === lower(cat));
+    if (rename) return rename.to;
+    return removed.some((n) => lower(n) === lower(cat)) ? null : cat;
+  };
+  if (Array.isArray(home.floors)) home.floors = home.floors.map((f) => ({ ...f, category: floorTo(f.category) }));
+
+  const statements: D1PreparedStatement[] = [
+    d1.prepare('UPDATE store_settings SET categories_json = ?, home_json = ?, updated_at = ? WHERE id = 1').bind(JSON.stringify(categories.map((k) => k.name)), JSON.stringify(home), now),
+    ...renames.map((r, i) => d1.prepare('UPDATE products SET product_type = ?, updated_at = ? WHERE lower(product_type) = ?').bind(`__fdm_rename_${i}__`, now, lower(r.from))),
+    ...renames.map((r, i) => d1.prepare('UPDATE products SET product_type = ? WHERE product_type = ?').bind(r.to, `__fdm_rename_${i}__`)),
+    ...removed.map((n) => d1.prepare(`UPDATE products SET product_type = '', updated_at = ? WHERE lower(product_type) = ?`).bind(now, lower(n))),
+  ];
+  for (let i = 0; i < affected.length; i += 40) statements.push(...reindexStatements(d1, affected.slice(i, i + 40)));
+  await d1.batch(statements);
+
+  // a smart collection can hold pieces by product type
+  if (affected.length) await rematerializeForProducts(d1, affected);
+  purge(c.executionCtx, [TAGS.catalog, TAGS.products, TAGS.collections, ...affected.map(TAGS.product)]);
+  await audit(
+    c,
+    'product.categories',
+    'settings',
+    null,
+    `Subcollections saved: ${categories.map((k) => k.name).join(', ') || 'none'}`,
+    { renames, removed, products: affected.length },
+  );
+  return c.json(await categoriesBody(d1));
 });
 
 /* ─────────── bulk ─────────── */

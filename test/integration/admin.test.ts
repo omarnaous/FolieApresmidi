@@ -395,6 +395,56 @@ describe('home page content', () => {
     await owner.json('PUT', '/api/admin/home', home([{ name: 'Tops', collectionHandle: null, imageMediaId: null }]));
   });
 
+  it('renames, reorders and removes subcollections on every piece and floor', async () => {
+    const coat = await createProduct({ title: 'Subcollection wool coat', productType: 'Jackets' });
+    const cami = await createProduct({ title: 'Subcollection silk cami', productType: 'Tops' });
+    const names = async () => (await new Shopper().json<StoreDTO>('GET', '/api/store')).data.categories;
+    const before = await owner.json<{ items: { name: string; count: number }[] }>('GET', '/api/admin/categories');
+    expect(before.data.items.map((c) => c.name)).toEqual(['Tops', 'Bottoms', 'Bralettes', 'Jackets', 'Sets']);
+    expect(before.data.items.find((c) => c.name === 'Jackets')!.count).toBeGreaterThan(0);
+
+    // a floor opens on Jackets
+    await owner.json('PUT', '/api/admin/home', home([{ name: 'Jackets', collectionHandle: null, category: 'Jackets', imageMediaId: null }]));
+
+    // Jackets becomes Outerwear and moves first, Tops is taken out, Knitwear is new
+    const saved = await owner.json<{ items: { name: string; count: number }[] }>('PUT', '/api/admin/categories', {
+      categories: [
+        { name: 'Outerwear', previous: 'Jackets' },
+        { name: 'Bottoms', previous: 'Bottoms' },
+        { name: 'Bralettes', previous: 'Bralettes' },
+        { name: 'Sets', previous: 'Sets' },
+        { name: 'Knitwear', previous: null },
+      ],
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.data.items.map((c) => c.name)).toEqual(['Outerwear', 'Bottoms', 'Bralettes', 'Sets', 'Knitwear']);
+    expect(await names()).toEqual(['Outerwear', 'Bottoms', 'Bralettes', 'Sets', 'Knitwear']);
+
+    expect((await owner.json<AdminProductDTO>('GET', `/api/admin/products/${coat.id}`)).data.productType).toBe('Outerwear');
+    expect((await owner.json<AdminProductDTO>('GET', `/api/admin/products/${cami.id}`)).data.productType).toBe('');
+    expect((await owner.json<AdminHomeDTO>('GET', '/api/admin/home')).data.floors[0]!.category).toBe('Outerwear');
+    // and the search finds it under its new name
+    const found = await new Shopper().json<ProductListDTO>('GET', '/api/products?q=outerwear');
+    expect(found.data.items.map((p) => p.title)).toContain('Subcollection wool coat');
+
+    // the same name twice is refused against the row
+    const twice = await owner.json('PUT', '/api/admin/categories', { categories: [{ name: 'Sets', previous: null }, { name: 'sets', previous: null }] });
+    expect(twice.status).toBe(422);
+    expect(twice.data.error.fields['categories.1.name']).toBeTruthy();
+
+    // back to the built-in list for the tests after this one
+    await owner.json('PUT', '/api/admin/categories', {
+      categories: [
+        { name: 'Tops', previous: null },
+        { name: 'Bottoms', previous: 'Bottoms' },
+        { name: 'Bralettes', previous: 'Bralettes' },
+        { name: 'Jackets', previous: 'Outerwear' },
+        { name: 'Sets', previous: 'Sets' },
+      ],
+    });
+    await owner.json('PUT', '/api/admin/home', home([{ name: 'Tops', collectionHandle: null, imageMediaId: null }]));
+  });
+
   it('switches a section off the page and back on', async () => {
     const hidden = sections('Maison FDM').map((s) => (s.key === 'popups' ? { ...s, visible: false } : s));
     const off = await owner.json<AdminHomeDTO>('PUT', '/api/admin/home', {

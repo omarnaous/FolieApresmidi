@@ -19,8 +19,9 @@ export default function ShelfTabs({ options, value, onChange, onPreview, control
   const list = useRef(null);
   const tabs = useRef([]);
   const last = useRef(null);
-  const selected = Math.max(0, options.findIndex((o) => o.value === value));
-  const [focus, setFocus] = useState(selected);
+  // -1 when none is on: the catalogue's "View all" lights no collection
+  const selected = options.findIndex((o) => o.value === value);
+  const [focus, setFocus] = useState(Math.max(0, selected));
   const [ink, setInk] = useState(null);
 
   // letter-spacing also pads the right of the last letter; the rule stops at the letter
@@ -32,7 +33,11 @@ export default function ShelfTabs({ options, value, onChange, onPreview, control
   // follow the selected tab
   useLayoutEffect(() => {
     const el = tabs.current[selected];
-    if (!el) return undefined;
+    if (!el) {
+      last.current = null;
+      setInk(null);
+      return undefined;
+    }
     const next = place(el);
     const prev = last.current;
     last.current = next;
@@ -67,7 +72,7 @@ export default function ShelfTabs({ options, value, onChange, onPreview, control
     return () => ro?.disconnect();
   }, []);
 
-  useEffect(() => setFocus(selected), [selected]);
+  useEffect(() => setFocus(Math.max(0, selected)), [selected]);
 
   const onKeyDown = (e) => {
     const lastIndex = options.length - 1;

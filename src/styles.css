@@ -535,6 +535,12 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   transition: background 0.25s var(--ease), color 0.25s var(--ease);
 }
 .nav-drop-item:hover { background: var(--terra); color: var(--bone); }
+/* a collection: its name, and its season line under it */
+.nav-drop-col { display: flex; flex-direction: column; gap: 4px; padding-block: 11px; }
+.nav-drop-sub { font-size: 9px; letter-spacing: 0.2em; color: var(--terra); transition: color 0.25s var(--ease); }
+.nav-drop-col:hover .nav-drop-sub { color: var(--bone); }
+.nav-drop-rule { height: 1px; margin: 8px 22px; background: var(--ink-14); }
+.nav-drop-all { margin-top: 6px; text-decoration: underline 1px; text-underline-offset: 5px; }
 
 /* the line-icon buttons that flank the mark */
 .nav-ico {
@@ -1402,6 +1408,58 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .menu-links a:hover,
 .menu-links button:hover { color: var(--chili); }
 .menu-accent { color: var(--chili); }
+.menu-links[hidden] { display: none; }
+/* the Boutique page takes the whole menu: no photographs under it */
+.menu.is-sub .menu-strip { display: none; }
+.menu-arrow { font-family: var(--sans); font-size: 0.5em; vertical-align: middle; opacity: 0.55; }
+
+/* the Boutique, opened inside the menu: collections with their season, then
+   the subcollections in small capitals, then everything */
+.menu-sub {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-block: 10px 18px;
+  animation: menu-sub-in 0.5s var(--ease) both;
+}
+@keyframes menu-sub-in {
+  from { opacity: 0; transform: translate3d(18px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .menu-sub { animation: none; } }
+.menu-sub-back {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--bone);
+}
+.menu-sub-back span { font-size: 20px; font-weight: 300; line-height: 1; }
+.menu-sub-cols { display: flex; flex-direction: column; gap: 14px; padding-block: 28px 26px; border-bottom: 1px solid var(--bone-14); }
+.menu-sub-cols a { display: flex; flex-direction: column; gap: 5px; }
+.menu-sub-name { font-family: var(--serif); font-size: clamp(28px, 8.4vw, 44px); line-height: 1.05; transition: color 0.35s var(--ease); }
+.menu-sub-season { font-size: 10px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--chili); }
+.menu-sub-cats { display: flex; flex-direction: column; padding-block: 22px 8px; }
+.menu-sub-cats a,
+.menu-sub-all {
+  padding-block: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  transition: color 0.35s var(--ease);
+}
+.menu-sub-all { margin-top: 14px; text-decoration: underline 1px; text-underline-offset: 6px; }
+.menu-sub-cols a:hover .menu-sub-name,
+.menu-sub-cats a:hover,
+.menu-sub-all:hover { color: var(--chili); }
 .menu-count {
   font-family: var(--sans);
   font-size: 11px;

@@ -33,7 +33,7 @@ store.get('/store', async (c) => {
      in the order the collections screen set; anything the owner has not
      ordered yet falls in alphabetically at the end. "All" always stands first. */
   const live = await db
-    .select({ handle: schema.collections.handle, title: schema.collections.title })
+    .select({ handle: schema.collections.handle, title: schema.collections.title, subtitle: schema.collections.subtitle })
     .from(schema.collections)
     .where(eq(schema.collections.published, true))
     .all();
@@ -42,7 +42,7 @@ store.get('/store', async (c) => {
     { label: 'All', collectionHandle: null },
     ...live
       .sort((a, b) => (order.get(a.handle) ?? 999) - (order.get(b.handle) ?? 999) || a.title.localeCompare(b.title))
-      .map((cl) => ({ label: cl.title, collectionHandle: cl.handle })),
+      .map((cl) => ({ label: cl.title, collectionHandle: cl.handle, subtitle: cl.subtitle ?? null })),
   ];
   const body: StoreDTO = {
     name: s.name,
@@ -51,6 +51,7 @@ store.get('/store', async (c) => {
     contact: { email: s.contactEmail, phone: s.contactPhone, instagram: s.instagram },
     logo: s.logoMediaId ? await mediaById(db, s.logoMediaId) : null,
     menu,
+    categories: s.categories,
     featuredCollectionHandle: s.featuredCollectionHandle,
     lookbookCollectionHandle: s.lookbookCollectionHandle,
     editorialCollectionHandle: s.editorialCollectionHandle,

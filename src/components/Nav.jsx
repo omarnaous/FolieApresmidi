@@ -45,9 +45,11 @@ export default function Nav({ onMenu, menuOpen, onSearch, page }) {
   const { data: store } = useStore();
   const [scrolled, setScrolled] = useState(false);
 
-  // the collections, in the owner's saved order — shown in the Boutique pop-up
+  // the Boutique pop-up: the collections in the owner's saved order, each with
+  // its season line, then the subcollections, then everything
   const collections = (store?.menu ?? []).filter((m) => m.collectionHandle);
-  const toCollection = (handle) => (e) => { e.preventDefault(); navigate(`/collections/${handle}`); };
+  const categories = store?.categories ?? [];
+  const go = (to) => (e) => { e.preventDefault(); navigate(to); };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > window.innerHeight * 0.9);
@@ -70,19 +72,31 @@ export default function Nav({ onMenu, menuOpen, onSearch, page }) {
               // the boutique opens a pop-up of the collections, in the saved order
               <span key={s.href} className="nav-drop">
                 <a className="label link-u" href={s.href} aria-haspopup="true">{s.short}</a>
-                <span className="nav-drop-panel" role="menu" aria-label="Collections">
-                  <a className="nav-drop-item" href="/collections/all" onClick={toCollection('all')} role="menuitem">All pieces</a>
+                <span className="nav-drop-panel" role="menu" aria-label="Boutique">
                   {collections.map((c) => (
                     <a
                       key={c.collectionHandle}
-                      className="nav-drop-item"
+                      className="nav-drop-item nav-drop-col"
                       href={`/collections/${c.collectionHandle}`}
-                      onClick={toCollection(c.collectionHandle)}
+                      onClick={go(`/collections/${c.collectionHandle}`)}
                       role="menuitem"
                     >
                       {c.label}
+                      {c.subtitle && <span className="nav-drop-sub">{c.subtitle}</span>}
                     </a>
                   ))}
+                  {categories.length > 0 && <span className="nav-drop-rule" role="separator" />}
+                  {categories.map((name) => {
+                    const to = `/collections/all?type=${encodeURIComponent(name)}`;
+                    return (
+                      <a key={name} className="nav-drop-item" href={to} onClick={go(to)} role="menuitem">
+                        {name}
+                      </a>
+                    );
+                  })}
+                  <a className="nav-drop-item nav-drop-all" href="/collections/all" onClick={go('/collections/all')} role="menuitem">
+                    View all
+                  </a>
                 </span>
               </span>
             ) : (

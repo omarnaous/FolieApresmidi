@@ -1,12 +1,21 @@
 import { eq } from 'drizzle-orm';
-import type { MenuItemDTO, OrderEmailDTO, SettingsDTO, SizeChartDTO } from '../../shared/api';
+import { PRODUCT_CATEGORIES, type MenuItemDTO, type OrderEmailDTO, type SettingsDTO, type SizeChartDTO } from '../../shared/api';
 import { parseJson, schema, type DB } from '../db/client';
 import { mediaById } from './media';
 
 export type SettingsRow = typeof schema.storeSettings.$inferSelect;
 
-export interface StoreSettings extends Omit<SettingsRow, 'menuJson'> {
+export interface StoreSettings extends Omit<SettingsRow, 'menuJson' | 'categoriesJson'> {
   menu: MenuItemDTO[];
+  /** The subcollections, in the owner's order. */
+  categories: string[];
+}
+
+/** The stored subcollections, or the built-in list for a store that never named its own. */
+export function readCategories(stored: string | null | undefined): string[] {
+  const raw = parseJson<unknown>(stored ?? '[]', []);
+  const names = Array.isArray(raw) ? raw.filter((n): n is string => typeof n === 'string' && !!n.trim()) : [];
+  return names.length ? names : [...PRODUCT_CATEGORIES];
 }
 
 const DEFAULTS: SettingsRow = {
@@ -20,6 +29,7 @@ const DEFAULTS: SettingsRow = {
   address: null,
   logoMediaId: null,
   menuJson: '[]',
+  categoriesJson: '[]',
   homeJson: '{}',
   sizeChartJson: '{}',
   orderEmailJson: '{}',
@@ -86,8 +96,8 @@ export function readSizeChart(stored: string): SizeChartDTO {
 
 export async function getSettings(db: DB): Promise<StoreSettings> {
   const row = (await db.select().from(schema.storeSettings).where(eq(schema.storeSettings.id, 1)).get()) ?? DEFAULTS;
-  const { menuJson, ...rest } = row;
-  return { ...rest, menu: parseJson<MenuItemDTO[]>(menuJson, []) };
+  const { menuJson, categoriesJson, ...rest } = row;
+  return { ...rest, menu: parseJson<MenuItemDTO[]>(menuJson, []), categories: readCategories(categoriesJson) };
 }
 
 export async function settingsDTO(db: DB, s: StoreSettings): Promise<SettingsDTO> {

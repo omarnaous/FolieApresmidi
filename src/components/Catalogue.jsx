@@ -139,13 +139,13 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     return [...rows].filter(([, values]) => values.length > 0);
   }, [first, options]);
 
-  /* The category row, as the home page's shelves have it. A collection
-     reached by a link but not on the menu still gets a tab, so the row always
-     says where you are. */
+  /* The collections row: the catalogue is looked at a collection at a time,
+     so there is no "All" tab — everything is reached from the menu's "View
+     all", and then no tab is lit. A collection reached by a link but not on
+     the menu still gets a tab, so the row always says where you are. */
   const tabs = useMemo(() => {
-    const rows = (store?.menu ?? []).map((c) => ({ value: c.collectionHandle ?? 'all', label: c.label }));
-    if (!rows.some((t) => t.value === 'all')) rows.unshift({ value: 'all', label: 'All' });
-    if (!rows.some((t) => t.value === handle) && collection.data) rows.push({ value: handle, label: collection.data.title });
+    const rows = (store?.menu ?? []).filter((c) => c.collectionHandle).map((c) => ({ value: c.collectionHandle, label: c.label }));
+    if (handle !== 'all' && !rows.some((t) => t.value === handle) && collection.data) rows.push({ value: handle, label: collection.data.title });
     return rows;
   }, [store?.menu, handle, collection.data]);
 
@@ -156,7 +156,8 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     if (type && !rows.some((r) => r.value.toLowerCase() === type.toLowerCase())) return [...rows, { value: type, count: 0 }];
     return rows;
   }, [first, type]);
-  const showCategories = (!isSearch || !!q) && categories.length > 0;
+  // only within a collection: the search and "View all" go without them
+  const showCategories = !isSearch && handle !== 'all' && categories.length > 0;
 
   // a colour filter shows its colour: the swatch the pieces carry, else the name if CSS knows it
   const swatches = useMemo(() => {
@@ -182,7 +183,12 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     : null;
   const sorts = q ? [RELEVANCE, ...SORTS] : SORTS;
   const suggestions = (suggest.data?.collections ?? []).filter((c) => c.handle !== handle).slice(0, 3);
-  const title = isSearch ? 'Search' : handle === 'all' ? 'All pieces' : collection.data?.title ?? (collection.isError ? 'All pieces' : ' ');
+  // "View all" reached from a subcollection in the menu is named after it
+  const title = isSearch
+    ? 'Search'
+    : handle === 'all'
+      ? type || 'All pieces'
+      : collection.data?.title ?? (collection.isError ? 'All pieces' : ' ');
 
   const reset = () => {
     pushed.current = '';

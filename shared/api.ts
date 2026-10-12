@@ -168,6 +168,8 @@ export interface MenuItemDTO {
   label: string;
   /** null = "All" */
   collectionHandle: string | null;
+  /** The collection's season line, "Fall Winter 26-27"; absent on "All" and in the stored order. */
+  subtitle?: string | null;
 }
 
 /** The home page sections the owner can rename, in page order. */
@@ -242,6 +244,8 @@ export interface StoreDTO {
   logo: MediaDTO | null;
   /** Category chips, in order. */
   menu: MenuItemDTO[];
+  /** The subcollections — Tops, Bottoms… — in the owner's order; a piece's product type is one of them. */
+  categories: string[];
   featuredCollectionHandle: string | null;
   lookbookCollectionHandle: string | null;
   editorialCollectionHandle: string | null;
@@ -963,8 +967,43 @@ export interface AdminLookPieceDTO {
  * The categories a collection is divided into — its subcollections. A piece
  * has one (its product type); the catalogue and the search filter by it.
  * A type outside this list is kept and still filters, it is just not offered.
+ * This is the built-in list; the owner renames, reorders and adds to it in the
+ * admin (StoreDTO.categories).
  */
 export const PRODUCT_CATEGORIES = ['Tops', 'Bottoms', 'Bralettes', 'Jackets', 'Sets'] as const;
+export const MAX_CATEGORIES = 20;
+
+/** GET /api/admin/categories: each subcollection and how many pieces are in it. */
+export interface AdminCategoryDTO {
+  name: string;
+  count: number;
+}
+
+/**
+ * PUT /api/admin/categories: the whole list, in order. `previous` is the name
+ * a row had when loaded — a different `name` renames it on every piece and
+ * floor; a row left out is taken off the pieces in it.
+ */
+export const CategoriesInput = z
+  .object({
+    categories: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1, 'Required').max(40),
+          previous: z.string().trim().max(80).nullish().transform((v) => v || null),
+        }),
+      )
+      .max(MAX_CATEGORIES),
+  })
+  .superRefine((v, ctx) => {
+    const seen = new Set<string>();
+    v.categories.forEach((c, i) => {
+      const key = c.name.toLowerCase();
+      if (seen.has(key)) ctx.addIssue({ code: 'custom', message: 'Already in the list', path: ['categories', i, 'name'] });
+      seen.add(key);
+    });
+  });
+export type CategoriesInput = z.input<typeof CategoriesInput>;
 
 export const BulkProductActionInput = z
   .object({

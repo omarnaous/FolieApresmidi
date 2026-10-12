@@ -631,6 +631,15 @@
 .adm .adm-namerow { display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr) auto auto; align-items: end; gap: 10px; }
 .adm .adm-namerow .adm-toggle--bare { padding-bottom: 6px; }
 .adm .adm-namerow__num { padding-bottom: 9px; font-family: var(--serif); color: var(--ash); font-variant-numeric: tabular-nums; }
+/* the subcollections list on the collections screen */
+.adm .adm-subcols { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.adm .adm-subcol { display: grid; grid-template-columns: 22px minmax(0, 260px) minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.adm .adm-subcol__num { color: var(--ash); font-size: 12px; text-align: right; }
+.adm .adm-subcol__count { font-size: 12px; }
+@media (max-width: 640px) {
+  .adm .adm-subcol { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .adm .adm-subcol__count { grid-column: 2; grid-row: 2; }
+}
 .adm .adm-floorrows { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; }
 .adm .adm-floorrow {
   display: grid;

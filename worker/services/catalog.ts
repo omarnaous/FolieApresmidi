@@ -11,10 +11,11 @@ import type {
   SearchSuggestDTO,
   VariantDTO,
 } from '../../shared/api';
-import { LOOK_MAX, PRODUCT_CATEGORIES } from '../../shared/api';
+import { LOOK_MAX } from '../../shared/api';
 import { schema, type DB } from '../db/client';
 import { chunk, mediaById, toMediaDTO } from './media';
 import { sellable, stockFor } from './inventory';
+import { readCategories } from './settings';
 
 export type ProductRow = typeof schema.products.$inferSelect;
 type VariantRow = typeof schema.variants.$inferSelect;
@@ -381,7 +382,10 @@ export async function listProducts(db: DB, p: ListParams): Promise<ProductListDT
         .bind(...base.params),
     );
   }
-  const [list, count, optionFacets, typeFacets, priceFacet] = await d1.batch<Record<string, unknown>>(stmts);
+  // the owner's order for the categories, read in the same round trip
+  if (wantFacets) stmts.push(d1.prepare(`SELECT categories_json FROM store_settings WHERE id = 1`));
+  const [list, count, optionFacets, typeFacets, priceFacet, categoryOrder] = await d1.batch<Record<string, unknown>>(stmts);
+  const categoryRank = readCategories((categoryOrder?.results?.[0] as { categories_json?: string } | undefined)?.categories_json);
 
   const rows = (list?.results ?? []).map(rowFrom);
   const hasMore = rows.length > p.limit;
@@ -402,16 +406,16 @@ export async function listProducts(db: DB, p: ListParams): Promise<ProductListDT
     total: Number((count?.results?.[0] as { n?: number } | undefined)?.n ?? 0),
     facets: {
       options: [...optionMap.values()],
-      productTypes: sortCategories((typeFacets?.results ?? []) as { value: string; count: number }[]),
+      productTypes: sortCategories((typeFacets?.results ?? []) as { value: string; count: number }[], categoryRank),
       price: price && price.min !== null && price.max !== null ? { min: price.min, max: price.max } : null,
     },
   };
 }
 
-/** The house's categories in the house's order, then any other type by size. */
-const CATEGORY_RANK = new Map(PRODUCT_CATEGORIES.map((c, i) => [c.toLowerCase(), i]));
-function sortCategories(rows: { value: string; count: number }[]) {
-  const rank = (v: string) => CATEGORY_RANK.get(v.toLowerCase()) ?? PRODUCT_CATEGORIES.length;
+/** The house's categories in the owner's order, then any other type by size. */
+function sortCategories(rows: { value: string; count: number }[], order: string[]) {
+  const ranks = new Map(order.map((c, i) => [c.toLowerCase(), i]));
+  const rank = (v: string) => ranks.get(v.toLowerCase()) ?? order.length;
   return [...rows].sort((a, b) => rank(a.value) - rank(b.value) || b.count - a.count || a.value.localeCompare(b.value));
 }
 

@@ -2,6 +2,8 @@ import { keepPreviousData, useInfiniteQuery, useQuery, type QueryKey } from '@ta
 import {
   formatMoney,
   get,
+  PRODUCT_CATEGORIES,
+  type AdminCategoryDTO,
   type AdminCollectionDTO,
   type AdminHomeDTO,
   type AdminCustomerDTO,
@@ -37,6 +39,7 @@ export const qk = {
   csvImport: (id: string) => ['admin', 'imports', id] as const,
   media: ['admin', 'media'] as const,
   collections: ['admin', 'collections'] as const,
+  categories: ['admin', 'categories'] as const,
   collection: (id: string) => ['admin', 'collections', 'detail', id] as const,
   customers: ['admin', 'customers'] as const,
   customerList: (q: Query) => ['admin', 'customers', 'list', q] as const,
@@ -112,6 +115,21 @@ export const useProduct = (id: string | undefined) =>
     queryFn: ({ signal }) => get<AdminProductDTO>(`/api/admin/products/${id}`, undefined, signal),
     enabled: !!id,
   });
+
+/** The subcollections, in the owner's order, with how many pieces each holds. */
+export const useCategories = () =>
+  useQuery({
+    queryKey: qk.categories,
+    queryFn: ({ signal }) => get<{ items: AdminCategoryDTO[] }>('/api/admin/categories', undefined, signal),
+    select: (d) => d.items,
+    staleTime: 60_000,
+  });
+
+/** Just the names, for a select — the built-in list while they load. */
+export function useCategoryNames(): string[] {
+  const q = useCategories();
+  return q.data ? q.data.map((c) => c.name) : [...PRODUCT_CATEGORIES];
+}
 
 export const useCollections = () =>
   useQuery({
