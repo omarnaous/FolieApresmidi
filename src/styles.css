@@ -1642,6 +1642,8 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .opt.on .opt-dot { box-shadow: 0 0 0 1.5px var(--bone), 0 0 0 2.5px var(--ink); }
 
 .cat-count { padding-top: 10px; }
+/* the subcollections, a row of their own under the collections */
+.cat-types { padding-top: 6px; }
 
 .cat-body { flex: 1; overflow-y: auto; padding-block: clamp(24px, 3vw, 40px) clamp(60px, 9vw, 110px); }
 .cat-empty { display: grid; place-items: center; gap: 16px; text-align: center; padding-block: clamp(60px, 12vh, 140px); }

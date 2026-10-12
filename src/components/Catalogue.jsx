@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router';
 import PieceCard, { PieceSkeletons } from './PieceCard';
 import ShelfTabs from './ShelfTabs';
-import { useCollection, useMoney, useProducts, useStore, useSuggest } from '../lib/queries';
+import { useCollection, useProducts, useStore } from '../lib/queries';
 import { parseCatalogue } from '../lib/routes';
 import { useEscape, useLinger } from '../hooks/useSheet';
 
@@ -28,7 +28,6 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   const current = useLinger(path, 820);
   const navigate = useNavigate();
   const location = useLocation();
-  const money = useMoney();
   const { data: store } = useStore();
   const input = useRef(null);
 
@@ -103,12 +102,10 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   const armed = !!current && !(isSearch && !q);
   const list = useProducts(query, { enabled: armed });
   const collection = useCollection(handle === 'all' ? null : handle);
-  const suggest = useSuggest(q);
 
   const results = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
   const first = list.data?.pages[0];
   const total = first?.total ?? 0;
-  const price = first?.facets.price;
 
   /* The collections row: the catalogue is looked at a collection at a time,
      so there is no "All" tab — everything is reached from the menu's "View
@@ -120,10 +117,14 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     return rows;
   }, [store?.menu, handle, collection.data]);
 
-  const range = total > 0 && price
-    ? price.min === price.max ? money(price.min) : `${money(price.min)} – ${money(price.max)}`
-    : null;
-  const suggestions = (suggest.data?.collections ?? []).filter((c) => c.handle !== handle).slice(0, 3);
+  /* The subcollections under the collections — only the ones what is being
+     looked at has pieces in, in the owner's order — plus the one chosen, so
+     it can be undone. The same in a collection, in View all and in a search. */
+  const categories = useMemo(() => {
+    const rows = (first?.facets.productTypes ?? []).map((r) => r.value);
+    if (type && !rows.some((r) => r.toLowerCase() === type.toLowerCase())) rows.push(type);
+    return rows;
+  }, [first, type]);
   // "View all" reached from a subcollection in the menu is named after it
   const title = isSearch
     ? 'Search'
@@ -169,32 +170,40 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
           {text && <button type="button" className="label link-u" onClick={() => setText('')}>Clear</button>}
         </div>
 
-        {!isSearch && (
-          <ShelfTabs
-            options={tabs}
-            value={handle}
-            onChange={(to) => go({ options: [], type: '', available: false }, to)}
-            controls="cat-results"
-            label="Categories"
-          />
+        {/* the collections, then their subcollections under them — the only
+            filters, in a collection, in View all and in a search alike; the
+            chosen subcollection carries over from one collection to the next */}
+        <ShelfTabs
+          options={tabs}
+          value={handle}
+          onChange={(to) => go({ options: [], available: false }, to)}
+          controls="cat-results"
+          label="Collections"
+        />
+
+        {categories.length > 0 && (
+          <div className="opts cat-types" role="group" aria-label="Subcollections">
+            {['', ...categories].map((value) => {
+              const on = value ? value.toLowerCase() === type.toLowerCase() : !type;
+              return (
+                <button
+                  key={value || 'all'}
+                  type="button"
+                  className={`opt ${on ? 'on' : ''}`}
+                  aria-pressed={on}
+                  onClick={() => go({ type: value })}
+                >
+                  {value || 'All'}
+                </button>
+              );
+            })}
+          </div>
         )}
 
-        {!isSearch && (
-        <div className="cat-count label muted" aria-live="polite">
-          {list.isPending ? 'Looking…' : `${total} ${total === 1 ? 'piece' : 'pieces'}`}
-          {range ? ` · ${range}` : ''}
-          {type ? ` · ${type}` : ''}
-          {q ? ` · “${q}”` : ''}
-          {suggestions.map((c) => (
-            <React.Fragment key={c.handle}>
-              {' · '}
-              <button className="label link-u" onClick={() => go({ q: '', type: '', options: [], sort: null }, c.handle)}>
-                {c.title}
-              </button>
-            </React.Fragment>
-          ))}
-        </div>
-        )}
+        {/* no count on screen; a screen reader still hears how many came back */}
+        <p className="sr-only" aria-live="polite">
+          {armed && !list.isPending ? `${total} ${total === 1 ? 'piece' : 'pieces'}` : ''}
+        </p>
       </div>
 
       <div className="cat-body shell" id="cat-results">
