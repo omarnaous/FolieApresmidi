@@ -2,22 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router';
 import PieceCard, { PieceSkeletons } from './PieceCard';
 import ShelfTabs from './ShelfTabs';
-import { isColourOption } from '../lib/catalog';
 import { useCollection, useMoney, useProducts, useStore, useSuggest } from '../lib/queries';
 import { parseCatalogue } from '../lib/routes';
 import { useEscape, useLinger } from '../hooks/useSheet';
-
-const SORTS = [
-  /* The house's own order — the one the admin's product list is dragged
-     into, and a collection's own running order when one is being looked at.
-     Nothing here is "featured": every piece is shown, in the order set. */
-  { key: 'featured', label: 'Our order' },
-  { key: 'price_asc', label: 'Price ↑' },
-  { key: 'price_desc', label: 'Price ↓' },
-  { key: 'title_asc', label: 'A–Z' },
-];
-// only offered while there is something to be relevant to
-const RELEVANCE = { key: 'relevance', label: 'Relevance' };
 
 const PAGE = 24;
 
@@ -62,7 +49,7 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   }, [current]);
   const { handle, q, type, sort, sortParam, options, available } = view;
   // the plain search — reached by the search icon — is just a field and its
-  // results: no category tabs, no facets, no sort.
+  // results: no collection tabs.
   const isSearch = view.base === '/search';
 
   const [text, setText] = useState(q);
@@ -123,22 +110,6 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
   const total = first?.total ?? 0;
   const price = first?.facets.price;
 
-
-  /* Facets as the server counts them, plus whatever is already chosen — a
-     pick that narrowed its own facet away must still be there to undo. */
-  const facets = useMemo(() => {
-    const rows = new Map((first?.facets.options ?? []).map((f) => [f.name, f.values.map((v) => v.value)]));
-    options.forEach((o) => {
-      const at = o.indexOf(':');
-      if (at < 1) return;
-      const name = o.slice(0, at);
-      const value = o.slice(at + 1);
-      const values = rows.get(name) ?? [];
-      if (!values.includes(value)) rows.set(name, [...values, value]);
-    });
-    return [...rows].filter(([, values]) => values.length > 0);
-  }, [first, options]);
-
   /* The collections row: the catalogue is looked at a collection at a time,
      so there is no "All" tab — everything is reached from the menu's "View
      all", and then no tab is lit. A collection reached by a link but not on
@@ -149,39 +120,9 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
     return rows;
   }, [store?.menu, handle, collection.data]);
 
-  /* The subcollections of what is being looked at — only the ones it has
-     pieces in, in the house's order — plus the one chosen, so it can be undone. */
-  const categories = useMemo(() => {
-    const rows = first?.facets.productTypes ?? [];
-    if (type && !rows.some((r) => r.value.toLowerCase() === type.toLowerCase())) return [...rows, { value: type, count: 0 }];
-    return rows;
-  }, [first, type]);
-  // only within a collection: the search and "View all" go without them
-  const showCategories = !isSearch && handle !== 'all' && categories.length > 0;
-
-  // a colour filter shows its colour: the swatch the pieces carry, else the name if CSS knows it
-  const swatches = useMemo(() => {
-    const m = new Map();
-    for (const p of results) {
-      for (const o of p.options) {
-        if (!isColourOption(o.name)) continue;
-        for (const v of o.values) if (v.swatch && !m.has(v.value.toLowerCase())) m.set(v.value.toLowerCase(), v.swatch);
-      }
-    }
-    return m;
-  }, [results]);
-  const dot = (value) =>
-    swatches.get(value.toLowerCase()) ?? (typeof CSS !== 'undefined' && CSS.supports('color', value) ? value : 'var(--sand)');
-
-  const toggleOption = (name, value) => {
-    const key = `${name}:${value}`;
-    go({ options: options.includes(key) ? options.filter((o) => o !== key) : [...options, key] });
-  };
-
   const range = total > 0 && price
     ? price.min === price.max ? money(price.min) : `${money(price.min)} – ${money(price.max)}`
     : null;
-  const sorts = q ? [RELEVANCE, ...SORTS] : SORTS;
   const suggestions = (suggest.data?.collections ?? []).filter((c) => c.handle !== handle).slice(0, 3);
   // "View all" reached from a subcollection in the menu is named after it
   const title = isSearch
@@ -232,79 +173,10 @@ export default function Catalogue({ path, top, onClose, onOpen }) {
           <ShelfTabs
             options={tabs}
             value={handle}
-            onChange={(to) => go({ options: [], type: '' }, to)}
+            onChange={(to) => go({ options: [], type: '', available: false }, to)}
             controls="cat-results"
             label="Categories"
           />
-        )}
-
-        {showCategories && (
-          <div className="opts cat-types" role="group" aria-label="Category">
-            {[{ value: '', count: null }, ...categories].map((c) => {
-              const on = c.value ? c.value.toLowerCase() === type.toLowerCase() : !type;
-              return (
-                <button
-                  key={c.value || 'all'}
-                  type="button"
-                  className={`opt ${on ? 'on' : ''}`}
-                  aria-pressed={on}
-                  aria-label={c.value ? `${c.value}${c.count ? `, ${c.count} ${c.count === 1 ? 'piece' : 'pieces'}` : ''}` : 'All categories'}
-                  onClick={() => go({ type: c.value })}
-                >
-                  {c.value || 'All'}
-                  {c.count ? <sup className="opt-n">{c.count}</sup> : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {!isSearch && (
-        <div className="cat-opts">
-          <div className="opts" role="group" aria-label="Refine">
-            <button type="button" className={`opt ${available ? 'on' : ''}`} aria-pressed={available} onClick={() => go({ available: !available })}>
-              In stock
-            </button>
-            {facets.map(([name, values]) => {
-              const colour = isColourOption(name);
-              return (
-                <React.Fragment key={name}>
-                  <span className="opt-name" aria-hidden="true">{name}</span>
-                  {values.map((value) => {
-                    const on = options.includes(`${name}:${value}`);
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        className={`opt ${on ? 'on' : ''}`}
-                        aria-pressed={on}
-                        aria-label={`${name}: ${value}`}
-                        onClick={() => toggleOption(name, value)}
-                      >
-                        {colour && <i className="opt-dot" style={{ background: dot(value) }} aria-hidden="true" />}
-                        {value}
-                      </button>
-                    );
-                  })}
-                </React.Fragment>
-              );
-            })}
-          </div>
-          <div className="opts opts-sort" role="group" aria-label="Sort">
-            <span className="opt-name" aria-hidden="true">Sort</span>
-            {sorts.map((o) => (
-              <button
-                key={o.key}
-                type="button"
-                className={`opt ${sort === o.key ? 'on' : ''}`}
-                aria-pressed={sort === o.key}
-                onClick={() => go({ sort: o.key })}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
         )}
 
         {!isSearch && (

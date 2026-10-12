@@ -59,7 +59,7 @@ export default function Shelf({ id, collection, accessory, label, onOpen, onAll,
   // put real data on the rail when it is this collection's and the rail is ready for it
   useEffect(() => {
     if (!data || isPlaceholderData) return;
-    const next = { key, items: data.items, total: data.total };
+    const next = { key, collection: collection ?? null, items: data.items, total: data.total };
     if (!shown) {
       setShown(next);
       setPhase('idle');
@@ -193,7 +193,9 @@ export default function Shelf({ id, collection, accessory, label, onOpen, onAll,
               }}
             />
           </div>
-          <button className="btn shelf-all" onClick={() => onAll(shown?.key === 'all' ? null : shown?.key)} data-cursor="All">
+          {/* the collection on the rail — not its cache key, which also says
+              which side of the house it shows ("accalmie:false") */}
+          <button className="btn shelf-all" onClick={() => onAll(shown?.collection ?? null)} data-cursor="All">
             See all {total} {allNoun} <span aria-hidden="true">→</span>
           </button>
         </div>
