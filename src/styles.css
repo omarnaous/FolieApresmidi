@@ -29,6 +29,19 @@
   font-style: italic;
   font-display: swap;
 }
+/* Figures. Giaza's numerals are drawn for show and hard to read as a price,
+   so every digit, currency sign and per cent set in the display serif comes
+   from Bodoni Moda (SIL OFL, BodoniModa-OFL.txt) — the wordmark's own family,
+   cut heavy enough to sit beside Giaza's letters. unicode-range keeps it to
+   those characters only: the words stay Giaza. */
+@font-face {
+  font-family: 'FDM Figures';
+  src: url('/fonts/BodoniModa-600.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0024, U+0025, U+0030-0039, U+00A3, U+20AC;
+}
 
 :root {
   /* Pigments */
@@ -57,7 +70,7 @@
   --ash: #8a837b;
 
   /* Type */
-  --serif: 'Giaza', 'Bodoni FLF', 'Instrument Serif', 'Times New Roman', serif;
+  --serif: 'FDM Figures', 'Giaza', 'Bodoni FLF', 'Instrument Serif', 'Times New Roman', serif;
   /* the wordmark's own face, for lockups and the small caps that carry the name */
   --didone: 'Bodoni FLF', 'Giaza', 'Times New Roman', serif;
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
