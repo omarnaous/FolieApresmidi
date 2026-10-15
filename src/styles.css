@@ -60,6 +60,10 @@
   --serif: 'Giaza', 'Bodoni FLF', 'Instrument Serif', 'Times New Roman', serif;
   /* the wordmark's own face, for lockups and the small caps that carry the name */
   --didone: 'Bodoni FLF', 'Giaza', 'Times New Roman', serif;
+  /* prices and figures: Giaza's numerals are drawn for a headline and its €
+     is broken, so money is set in a didone cut for text — Bodoni Moda's
+     optical sizes keep the hairlines alive at a price's size */
+  --num: 'Bodoni Moda', 'Bodoni FLF', 'Times New Roman', serif;
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
 
   /* Rhythm */
@@ -137,7 +141,15 @@ a { color: inherit; text-decoration: none; }
 }
 .label-lg { font-size: 11px; letter-spacing: 0.26em; }
 .muted { color: var(--ash); }
-.serif-num { font-family: var(--serif); font-size: 13px; letter-spacing: 0.04em; }
+.serif-num { font-size: 13px; letter-spacing: 0.04em; }
+
+/* every price and figure, in the one face for numbers */
+.serif-num, .fig b, .card-price, .rc-price, .pdp-price, .total b, .co-line-price, .co-summary-total, .price-was {
+  font-family: var(--num);
+  font-weight: 500;
+  font-optical-sizing: auto;
+  font-variant-numeric: lining-nums tabular-nums;
+}
 
 .lede {
   font-size: clamp(16px, 1.45vw, 21px);
@@ -630,7 +642,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 @media (max-width: 860px) { .intro { grid-template-columns: 1fr; } }
 
 .figures { display: flex; gap: clamp(26px, 5vw, 70px); flex-wrap: wrap; }
-.fig b { display: block; font-family: var(--serif); font-size: clamp(30px, 3.4vw, 50px); line-height: 1; font-weight: 400; }
+.fig b { display: block; font-size: clamp(30px, 3.4vw, 50px); line-height: 1; }
 .fig span { display: block; margin-top: 8px; }
 
 /* ══ SHOP GRID ═══════════════════════════════════════════ */
@@ -643,7 +655,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 @media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 760px) { .grid { grid-template-columns: repeat(2, 1fr); } }
 
-.card-price { font-family: var(--serif); font-size: 17px; white-space: nowrap; }
+.card-price { font-size: 17px; white-space: nowrap; }
 
 /* ══ EDITORIAL SPLIT ═════════════════════════════════════ */
 
@@ -893,7 +905,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .x:hover { color: var(--chili); }
 
 .total { display: flex; justify-content: space-between; align-items: baseline; }
-.total b { font-family: var(--serif); font-size: 25px; font-weight: 400; }
+.total b { font-size: 25px; }
 
 .empty { display: grid; place-items: center; gap: 16px; height: 100%; text-align: center; color: var(--ash); }
 
@@ -1119,7 +1131,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   letter-spacing: -0.018em;
   margin: 12px 0 0;
 }
-.pdp-price { font-family: var(--serif); font-size: clamp(22px, 2vw, 29px); }
+.pdp-price { font-size: clamp(22px, 2vw, 29px); }
 .pdp-note { font-size: 15px; line-height: 1.55; color: var(--ink-80); margin: 0; max-width: 46ch; }
 
 .pdp-field { display: flex; flex-direction: column; gap: 11px; }
@@ -2175,14 +2187,14 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .co-line-opt { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ash); }
-.co-line-price { font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.co-line-price { font-size: 13.5px; white-space: nowrap; }
 .co-total {
   display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
   padding-top: 16px;
   margin-top: 2px;
   border-top: 1px solid var(--ink-14);
 }
-.co-total b { font-family: var(--didone); font-size: clamp(26px, 2.4vw, 34px); line-height: 1; font-weight: 400; }
+.co-total b { font-size: clamp(26px, 2.4vw, 34px); line-height: 1; }
 /* the note that closes the card, given room to sit apart from the total */
 .co-ship { line-height: 1.9; }
 .co-summary-in > .co-ship { margin-top: 16px; }
@@ -2239,7 +2251,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
     color: var(--ink);
     text-align: left;
   }
-  .co-summary-total { font-family: var(--didone); font-size: 20px; line-height: 1; }
+  .co-summary-total { font-size: 20px; line-height: 1; }
   .co-summary-caret {
     display: inline-block;
     width: 6px; height: 6px;
@@ -2386,7 +2398,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .co-rows { margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .co-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--ink-80); }
 .co-row dt { color: var(--ash); }
-.co-row dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.co-row dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
 
 /* The order page (OrderView): the address, facts, blocks and the status
    timeline. Named for the account pages they were first drawn for. */
@@ -2595,7 +2607,7 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
 .rc-meta { display: grid; gap: 5px; padding-top: 16px; }
 .rc-line { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; }
 .rc-name { margin: 0; min-width: 0; font-family: var(--sans); font-size: 15px; font-weight: 400; line-height: 1.35; letter-spacing: 0.01em; }
-.rc-price { flex: none; font-family: var(--serif); font-size: 17px; white-space: nowrap; }
+.rc-price { flex: none; font-size: 17px; white-space: nowrap; }
 .rc-name a { color: inherit; text-decoration: none; }
 .rc-colours { display: flex; align-items: center; gap: 10px; margin-top: 3px; color: var(--ink-80); }
 .rc-dots { display: inline-flex; padding-left: 1px; }
