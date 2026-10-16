@@ -15,6 +15,7 @@ import { formatMoney } from '../../shared/money';
 import { ApiError, get, patch, post } from '../lib/api';
 import { apiFields, focusFirstError, messageFor, stockLines, type FieldErrors } from '../lib/errors';
 import { qk, useCartQuery, useStore } from '../lib/queries';
+import { initiateCheckout, purchase } from '../lib/metaPixel';
 import {
   ADDRESS_ORDER,
   AddressFields,
@@ -181,6 +182,7 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
         setCo(checkout);
         seed(checkout, previous);
         setBoot('ready');
+        initiateCheckout(checkout.lines, checkout.pricing.total, checkout.pricing.currency);
       },
       (err: unknown) => {
         if (!live) return;
@@ -350,6 +352,7 @@ export default function CheckoutFlow({ onClose }: { onClose: () => void }) {
         { paymentMethod: payment },
       );
       writeId(null);
+      purchase(done.order);
       client.setQueryData(qk.order(done.orderToken), done.order);
       void client.invalidateQueries({ queryKey: qk.cart });
       navigate(`/orders/${encodeURIComponent(done.orderToken)}`, { replace: true });

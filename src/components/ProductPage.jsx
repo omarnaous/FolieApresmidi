@@ -9,6 +9,7 @@ import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 import { useEscape, useLinger, useSheetFocus } from '../hooks/useSheet';
 import { featuredIn, isColourOption, isPlaceholderOption, isSizeOption, resolveVariant, srcSet } from '../lib/catalog';
 import { isNotFound } from '../lib/errors';
+import { viewContent } from '../lib/metaPixel';
 import { useAvailability, useLook, useMoney, useProduct, useStore } from '../lib/queries';
 
 /** "Size" → "Sizes", for the spec list. */
@@ -44,6 +45,12 @@ export default function ProductPage({ handle, onClose, onOpen }) {
   const stage = useRef(null);
   const frame = useRef(0);
   const [shot, setShot] = useState(0);
+
+  // the Meta pixel: this piece was looked at
+  const currency = useStore().data?.currency;
+  useEffect(() => {
+    if (p && currency) viewContent(p, currency);
+  }, [p?.id, currency]);
 
   useEffect(() => {
     if (!p) return;

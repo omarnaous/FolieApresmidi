@@ -4,6 +4,7 @@ import { del, patch, post } from '../lib/api';
 import { qk, useCartQuery } from '../lib/queries';
 import { messageFor } from '../lib/errors';
 import { resolveVariant } from '../lib/catalog';
+import { addToCart } from '../lib/metaPixel';
 
 /** Where the bag lived before the server cart; cleared once, on first load. */
 const LEGACY_KEY = 'fdm.bag.v1';
@@ -81,6 +82,7 @@ export function CartProvider({ children }) {
     }
     try {
       await send(() => post('/api/cart/lines', { variantId: variant.id, quantity: 1 }));
+      addToCart(product, variant.price, client.getQueryData(qk.store)?.currency ?? 'USD');
       const spec = variant.options.filter((v) => v !== 'One size' && v !== 'Default Title').join(' / ');
       setToast(spec ? `${product.title} — ${spec} added` : `${product.title} added`);
       return true;
@@ -88,7 +90,7 @@ export function CartProvider({ children }) {
       setToast(messageFor(err, 'That did not go in the bag. Try again.'));
       return false;
     }
-  }, [send]);
+  }, [send, client]);
 
   const qty = useCallback((lineId, by) => {
     const line = client.getQueryData(qk.cart)?.lines.find((l) => l.id === lineId);
