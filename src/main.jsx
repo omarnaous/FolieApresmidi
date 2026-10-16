@@ -7,6 +7,7 @@ import App from './App';
 import { CartProvider } from './store/cart';
 import { createQueryClient, seedInitialData } from './lib/queryClient';
 import { onCatalogChange } from './lib/sync';
+import { MetaPixel } from './lib/pixel';
 
 // The admin is its own chunk and its own app — no preloader, cursor or Lenis.
 const AdminApp = lazy(() => import('./admin/AdminApp'));
@@ -24,6 +25,7 @@ createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <MetaPixel />
         <Routes>
           <Route path="/admin/*" element={<Suspense fallback={null}><AdminApp /></Suspense>} />
           <Route path="*" element={<CartProvider><App /></CartProvider>} />

@@ -14,15 +14,15 @@ import { and, eq } from 'drizzle-orm';
 
 export const seo = new Hono<AppEnv>();
 
-/** CSP for HTML documents: only our own scripts; styles/fonts from Google Fonts. */
+/** CSP for HTML documents: our own scripts plus the Meta Pixel; styles/fonts from Google Fonts. */
 export const PAGE_CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' https://connect.facebook.net",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://www.facebook.com",
   "media-src 'self' blob:",
-  "connect-src 'self'",
+  "connect-src 'self' https://www.facebook.com https://connect.facebook.net",
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
