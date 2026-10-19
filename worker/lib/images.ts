@@ -19,13 +19,18 @@ export function sniffImage(bytes: Uint8Array): ImageKind | null {
  * The two files the site itself uses: the opening film and the notebook the
  * Limited edition section hands out. Sniffed by their bytes, like the images.
  */
+const NOT_A_FILM = new Set(['avif', 'avis', 'heic', 'heix', 'heim', 'heis', 'mif1', 'msf1', 'crx ', 'M4A ', 'M4B ', 'M4P ']);
+
 export function sniffSiteFile(bytes: Uint8Array): ImageKind | null {
   const ascii = (from: number, len: number) => String.fromCharCode(...bytes.slice(from, from + len));
   if (ascii(0, 4) === '%PDF') return { mime: 'application/pdf', ext: 'pdf' };
-  // an MP4 (or QuickTime) file names its brand in the ftyp box
+  // an MP4 (or QuickTime) file opens on an ftyp box naming its brand. Editors
+  // and phones write dozens of brands (iso4–iso6, mp4v, dash, MSNV, 3gp…), so
+  // any ftyp file is taken as a film except the brands of a still image or of
+  // sound alone — those share the same box but would never play as a film
   if (ascii(4, 4) === 'ftyp') {
     const brand = ascii(8, 4);
-    if (['isom', 'iso2', 'mp41', 'mp42', 'avc1', 'M4V ', 'qt  '].includes(brand)) return { mime: 'video/mp4', ext: 'mp4' };
+    if (!NOT_A_FILM.has(brand)) return { mime: 'video/mp4', ext: 'mp4' };
   }
   return null;
 }
