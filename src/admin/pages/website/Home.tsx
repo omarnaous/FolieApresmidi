@@ -164,9 +164,8 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
     onError: (err) => setErrors(apiFieldErrors(err)),
   });
 
-  const submit = () => {
-    if (save.isPending) return;
-    const body: HomeInput = {
+  /** What PUT /api/admin/home is sent for a draft. */
+  const bodyOf = (draft: HomeDraft): HomeInput => ({
       sections: draft.sections.map((s) => ({ key: s.key, label: s.label, navLabel: s.navLabel, visible: s.visible })),
       hero: { videoMediaId: draft.video?.id ?? null, videoType: draft.video ? draft.videoType : null },
       ribbon: draft.ribbon,
@@ -197,7 +196,34 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
         rows: draft.popups.map((r) => ({ place: r.place, city: r.city, dates: r.dates, time: r.time, status: r.status })),
       },
       footer: { blurb: draft.footerBlurb, careNote: draft.footerCare.trim() || null },
-    };
+  });
+
+  /* A film is the one thing on this page that goes live the moment it is
+     chosen: it took a minute to upload, and an owner who sees it play back
+     here takes it as done. So it is saved at once — on top of the page as
+     last saved, never with other edits still being made here, which wait for
+     Save as before. */
+  const saveFilm = useMutation({
+    mutationFn: (film: { video: MediaDTO | null; videoType: string | null }) =>
+      put<AdminHomeDTO>('/api/admin/home', bodyOf({ ...base, ...film })),
+    onSuccess: (dto) => {
+      qc.setQueryData(qk.home, dto);
+      void qc.invalidateQueries({ queryKey: qk.store });
+      setSaved(dto);
+      const film = { video: dto.hero.video, videoType: dto.hero.type };
+      setBase((b) => ({ ...b, ...film }));
+      setDraft((d) => ({ ...d, ...film }));
+      toast.success(dto.hero.video ? 'The film is on the website' : 'The house film is back on the website');
+    },
+    onError: (err) => {
+      setErrors(apiFieldErrors(err));
+      toast.error('The film is uploaded but not on the website yet — press Save');
+    },
+  });
+
+  const submit = () => {
+    if (save.isPending) return;
+    const body = bodyOf(draft);
     const errs = validate(HomeInput, body) ?? {};
     setErrors(errs);
     if (Object.keys(errs).length) return window.scrollTo({ top: 0 });
@@ -285,8 +311,12 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
             value={draft.video}
             error={errors['hero.videoMediaId']}
             type={draft.videoType}
-            hint="An MP4, MOV or M4V, up to 95 MB — H.264 plays on every phone and browser. It plays silently, full screen, on a loop, framed from the centre. With nothing uploaded, the house's own campaign film plays."
-            onChange={(video, type) => setDraft((d) => ({ ...d, video, videoType: video ? type ?? null : null }))}
+            hint="An MP4, MOV or M4V, up to 95 MB — H.264 plays on every phone and browser. It goes on the website as soon as it has uploaded, and plays silently, full screen, on a loop, framed from the centre. Remove it and the house's own campaign film plays again."
+            onChange={(video, type) => {
+              const film = { video, videoType: video ? type ?? null : null };
+              setDraft((d) => ({ ...d, ...film }));
+              saveFilm.mutate(film);
+            }}
           />
         </Card>
 
