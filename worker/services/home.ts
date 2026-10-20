@@ -20,7 +20,7 @@ interface StoredFloor {
 
 export interface Home {
   sections: HomeSectionDTO[];
-  hero: { videoMediaId: string | null };
+  hero: { videoMediaId: string | null; videoType?: string | null };
   ribbon: string[];
   maison: { heading: string; intro: string | null };
   floors: StoredFloor[];
@@ -105,7 +105,7 @@ export function readHome(json: string | null | undefined): Home {
     sections,
     // every field below falls back on its own: a store that saved before a
     // section (or a whole piece of copy) existed still reads as it did then
-    hero: { videoMediaId: stored.hero?.videoMediaId ?? null },
+    hero: { videoMediaId: stored.hero?.videoMediaId ?? null, videoType: stored.hero?.videoType ?? null },
     ribbon: stored.ribbon?.length ? stored.ribbon : HOME_DEFAULTS.ribbon,
     maison: stored.maison ?? HOME_DEFAULTS.maison,
     floors: stored.floors?.length ? stored.floors : HOME_DEFAULTS.floors,
@@ -125,7 +125,7 @@ export function readHome(json: string | null | undefined): Home {
 /** The document PUT /api/admin/home stores, from its validated input. */
 export const homeFromInput = (input: HomeInput): Home => ({
   sections: input.sections.map((s) => ({ key: s.key, label: s.label, navLabel: s.navLabel, visible: s.visible ?? true })),
-  hero: { videoMediaId: input.hero?.videoMediaId ?? null },
+  hero: { videoMediaId: input.hero?.videoMediaId ?? null, videoType: input.hero?.videoMediaId ? input.hero?.videoType ?? null : null },
   ribbon: (input.ribbon ?? []).map((w) => w.trim()).filter(Boolean),
   maison: { heading: input.maison.heading, intro: input.maison.intro ?? null },
   floors: input.floors.map((f) => ({
@@ -253,7 +253,7 @@ async function resolveLookbook(d1: D1Database, home: Home) {
 /** The copy shared by both DTOs, so the shop and the admin can never disagree. */
 const common = (home: Home, notebook: MediaDTO | null, video: MediaDTO | null, lookbook: HomeDTO['lookbook']) => ({
   sections: home.sections,
-  hero: { video },
+  hero: { video, type: video ? home.hero.videoType ?? null : null },
   ribbon: home.ribbon,
   maison: home.maison,
   boutique: home.boutique,

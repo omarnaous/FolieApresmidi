@@ -16,22 +16,38 @@ export function sniffImage(bytes: Uint8Array): ImageKind | null {
 }
 
 /**
+ * The ftyp brands that are pictures, not films — HEIC and AVIF stills share
+ * the MP4 container. Every other brand is a film: cameras, phones and editors
+ * write dozens (isom, iso4–iso9, mp41, mp42, avc1, M4V, qt, dash, 3gp4, MSNV,
+ * XAVC…), and a list of the allowed ones turned real films away.
+ */
+const STILL_BRANDS = ['avif', 'avis', 'heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'mif1', 'msf1'];
+/** A QuickTime file old enough to have no ftyp box opens straight on one of these. */
+const QUICKTIME_BOXES = ['moov', 'mdat', 'wide', 'free', 'skip', 'pnot'];
+
+/**
  * The two files the site itself uses: the opening film and the notebook the
  * Limited edition section hands out. Sniffed by their bytes, like the images.
+ * An MP4, M4V or MOV is one container family and is served as video/mp4:
+ * every browser plays an H.264 .mov that way.
  */
 export function sniffSiteFile(bytes: Uint8Array): ImageKind | null {
   const ascii = (from: number, len: number) => String.fromCharCode(...bytes.slice(from, from + len));
   if (ascii(0, 4) === '%PDF') return { mime: 'application/pdf', ext: 'pdf' };
-  // an MP4 (or QuickTime) file names its brand in the ftyp box
-  if (ascii(4, 4) === 'ftyp') {
-    const brand = ascii(8, 4);
-    if (['isom', 'iso2', 'mp41', 'mp42', 'avc1', 'M4V ', 'qt  '].includes(brand)) return { mime: 'video/mp4', ext: 'mp4' };
-  }
+  if (ascii(4, 4) === 'ftyp') return STILL_BRANDS.includes(ascii(8, 4)) ? null : { mime: 'video/mp4', ext: 'mp4' };
+  if (QUICKTIME_BOXES.includes(ascii(4, 4))) return { mime: 'video/mp4', ext: 'mp4' };
   return null;
 }
 
-/** A film is big; a notebook is not. One at a time, so one request carries one file. */
-export const MAX_SITE_FILE_BYTES = 80 * 1024 * 1024;
+/** How many leading bytes sniffSiteFile needs. */
+export const SITE_FILE_SNIFF_BYTES = 12;
+
+/**
+ * A film is big; a notebook is not. Cloudflare takes a request body of up
+ * to 100 MB on this plan, so the ceiling sits just under it. One file a
+ * request, streamed through to storage — never held whole in memory.
+ */
+export const MAX_SITE_FILE_BYTES = 95 * 1024 * 1024;
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_UPLOAD_FILES = 20;

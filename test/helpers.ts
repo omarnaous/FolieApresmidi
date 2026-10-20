@@ -35,6 +35,8 @@ export class Shopper {
 
     const init: RequestInit = { method, headers: h };
     if (body instanceof FormData) init.body = body;
+    // a file sent as the body itself, as the admin's uploads are
+    else if (body instanceof Uint8Array) init.body = body;
     else if (body !== undefined) {
       h['content-type'] = 'application/json';
       init.body = JSON.stringify(body);

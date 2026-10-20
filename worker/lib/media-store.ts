@@ -43,6 +43,26 @@ export async function putMedia(env: Env, key: string, bytes: Uint8Array, content
   await env.KV.put(`${PREFIX}${key}`, bytes, { metadata: { contentType } });
 }
 
+/**
+ * Store a file as it arrives, without holding it: R2 takes a stream of known
+ * length. KV has no streaming write, so there the bytes are gathered first —
+ * which only ever happens for a notebook, since KV refuses films.
+ */
+export async function putMediaStream(env: Env, key: string, body: ReadableStream<Uint8Array>, length: number, contentType: string): Promise<void> {
+  const bucket = mediaBucket(env);
+  if (bucket) {
+    const fixed = new FixedLengthStream(length);
+    const [, put] = await Promise.all([
+      body.pipeTo(fixed.writable),
+      bucket.put(key, fixed.readable, { httpMetadata: { contentType, cacheControl: 'public, max-age=31536000, immutable' } }),
+    ]);
+    if (!put) throw new AppError('BAD_REQUEST', 'The file was not stored. Try again.');
+    return;
+  }
+  const bytes = new Uint8Array(await new Response(body).arrayBuffer());
+  await putMedia(env, key, bytes, contentType);
+}
+
 export async function getKvMedia(env: Env, key: string): Promise<{ bytes: ArrayBuffer; contentType: string } | null> {
   if (!env.KV) return null;
   const { value, metadata } = await env.KV.getWithMetadata<{ contentType?: string }>(`${PREFIX}${key}`, 'arrayBuffer');

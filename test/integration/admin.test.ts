@@ -489,12 +489,39 @@ describe('home page content', () => {
     // the bytes are what is checked, never the name or the declared type
     const mp4 = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0]);
     const pdf = new TextEncoder().encode('%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer<<>>');
+    const ftyp = (brand: string) => new Uint8Array([0, 0, 0, 0x18, ...new TextEncoder().encode('ftyp' + brand), 0, 0, 0, 0]);
 
-    const send = (bytes: Uint8Array, name: string, type: string) => {
-      const fd = new FormData();
-      fd.append('file', new File([bytes], name, { type }));
-      return owner.json<SiteFileDTO>('POST', '/api/admin/site-files', fd);
-    };
+    // the file is the request body, streamed through; its name rides in a header
+    const send = (bytes: Uint8Array, name: string, type: string) =>
+      owner.json<SiteFileDTO>('POST', '/api/admin/site-files', bytes, { 'content-type': type, 'x-file-name': encodeURIComponent(name) });
+
+    // films from phones, cameras and editors name brands well beyond isom
+    for (const brand of ['iso5', 'iso6', 'dash', '3gp4', 'MSNV', 'XAVC', 'qt  ', 'M4V ', 'mp42']) {
+      const res = await send(ftyp(brand), `clip-${brand.trim()}.mov`, 'video/quicktime');
+      expect(res.status, `${brand}: ${JSON.stringify(res.data)}`).toBe(201);
+      expect(res.data.mime).toBe('video/mp4');
+    }
+    // a HEIC photograph shares the container, and is not a film
+    expect((await send(ftyp('heic'), 'photo.mp4', 'video/mp4')).status).toBe(422);
+    // an old QuickTime file with no ftyp box opens on its movie box
+    const oldMov = new Uint8Array([0, 0, 0, 0x10, ...new TextEncoder().encode('moov'), 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect((await send(oldMov, 'old.mov', 'video/quicktime')).status).toBe(201);
+    // with its length given, as a browser sends it, the film streams straight to storage — and reads back whole
+    const big = new Uint8Array(3 * 1024 * 1024 + 7);
+    big.set(ftyp('isom'));
+    for (let i = 24; i < big.length; i++) big[i] = i % 251;
+    const streamed = await owner.json<SiteFileDTO>('POST', '/api/admin/site-files', big, {
+      'content-type': 'video/mp4',
+      'content-length': String(big.byteLength),
+      'x-file-name': 'long-take.mp4',
+    });
+    expect(streamed.status).toBe(201);
+    expect(streamed.data.bytes).toBe(big.byteLength);
+    const back = new Uint8Array(await (await new Shopper().request('GET', streamed.data.url)).arrayBuffer());
+    expect(back.byteLength).toBe(big.byteLength);
+    expect(back[big.length - 1]).toBe(big[big.length - 1]);
+    // a name in any script survives the header
+    expect((await send(mp4, 'défilé été.mp4', 'video/mp4')).data.name).toBe('défilé été.mp4');
 
     const film = await send(mp4, 'campaign.mp4', 'video/mp4');
     expect(film.status).toBe(201);
@@ -504,22 +531,23 @@ describe('home page content', () => {
     expect(notebook.data.mime).toBe('application/pdf');
 
     // a file pretending to be a film is refused on its bytes
-    const fd = new FormData();
-    fd.append('file', new File([new TextEncoder().encode('just text')], 'sneaky.mp4', { type: 'video/mp4' }));
-    const liar = await owner.json('POST', '/api/admin/site-files', fd);
+    const liar = await owner.json('POST', '/api/admin/site-files', new TextEncoder().encode('just text'), { 'content-type': 'video/mp4', 'x-file-name': 'sneaky.mp4' });
     expect(liar.status).toBe(422);
     expect(liar.data.error.fields.file).toBeTruthy();
 
     const saved = await owner.json<AdminHomeDTO>('PUT', '/api/admin/home', {
       ...home([{ name: 'Tops', collectionHandle: null, imageMediaId: null }]),
-      hero: { videoMediaId: film.data.id },
+      hero: { videoMediaId: film.data.id, videoType: 'video/mp4; codecs="hvc1.1.6.L93.B0"' },
       journal: { heading: 'H', intro: 'I', buttonLabel: 'B', notebookMediaId: notebook.data.id },
     });
     expect(saved.status).toBe(200);
     expect(saved.data.hero.video?.url).toBe(film.data.url);
+    // the codec read in the admin travels with the film, so a browser can decline it
+    expect(saved.data.hero.type).toBe('video/mp4; codecs="hvc1.1.6.L93.B0"');
 
     const store = await new Shopper().json<StoreDTO>('GET', '/api/store');
     expect(store.data.home.hero.video?.url).toBe(film.data.url);
+    expect(store.data.home.hero.type).toBe('video/mp4; codecs="hvc1.1.6.L93.B0"');
     expect(store.data.home.journal.notebook?.alt).toBe('notebook.pdf');
 
     // the film is served with byte ranges, or Safari will not play it

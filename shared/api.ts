@@ -217,8 +217,13 @@ export interface FloorDTO {
  */
 export interface HomeDTO {
   sections: HomeSectionDTO[];
-  /** The opening film. Without an uploaded video the built-in campaign film plays. */
-  hero: { video: MediaDTO | null };
+  /**
+   * The opening film. Without an uploaded video the built-in campaign film
+   * plays. `type` is the film's MIME type with its codec, read in the admin
+   * when it was uploaded (`video/mp4; codecs="avc1.640028"`), so a browser
+   * that cannot play it can tell before trying — and play the house film.
+   */
+  hero: { video: MediaDTO | null; type: string | null };
   /** The words that run round the ribbon under the film. */
   ribbon: string[];
   maison: { heading: string; intro: string | null };
@@ -1496,7 +1501,7 @@ export type SettingsInput = z.input<typeof SettingsInput>;
 /** GET /api/admin/home. A floor's `image` is only the one chosen here; `fallback` is what shows without it. */
 export interface AdminHomeDTO {
   sections: HomeSectionDTO[];
-  hero: { video: MediaDTO | null };
+  hero: { video: MediaDTO | null; type: string | null };
   ribbon: string[];
   maison: { heading: string; intro: string | null };
   floors: (Omit<FloorDTO, 'image'> & { image: MediaDTO | null; fallback: MediaDTO | null })[];
@@ -1541,7 +1546,18 @@ export const HomeInput = z.object({
     .length(HOME_SECTIONS.length)
     .refine((list) => new Set(list.map((x) => x.key)).size === list.length, 'Each section once'),
   /** the uploaded opening film; null plays the built-in one */
-  hero: z.object({ videoMediaId: zId.nullable().default(null) }).default({ videoMediaId: null }),
+  hero: z
+    .object({
+      videoMediaId: zId.nullable().default(null),
+      videoType: z
+        .string()
+        .trim()
+        .max(120)
+        .regex(/^video\/mp4(; ?codecs="[A-Za-z0-9.,_ -]+")?$/, 'Not a video type')
+        .nullish()
+        .transform((v) => v || null),
+    })
+    .default({ videoMediaId: null, videoType: null }),
   ribbon: z.array(z.string().trim().min(1, 'Write a word or take the row out').max(40)).max(MAX_RIBBON).default([]),
   maison: z.object({
     heading: zHeading,

@@ -60,6 +60,8 @@ interface PopUpRow extends PopUpDTO {
 interface HomeDraft {
   sections: SectionRow[];
   video: MediaDTO | null;
+  /** the film's MIME type with its codec, read when it was uploaded */
+  videoType: string | null;
   ribbon: string[];
   heading: string;
   intro: string;
@@ -85,6 +87,7 @@ interface HomeDraft {
 const fromDTO = (h: AdminHomeDTO): HomeDraft => ({
   sections: h.sections.map((s) => ({ key: s.key, label: s.label, navLabel: s.navLabel, visible: s.visible })),
   video: h.hero.video,
+  videoType: h.hero.type,
   ribbon: h.ribbon,
   heading: h.maison.heading,
   intro: h.maison.intro ?? '',
@@ -165,7 +168,7 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
     if (save.isPending) return;
     const body: HomeInput = {
       sections: draft.sections.map((s) => ({ key: s.key, label: s.label, navLabel: s.navLabel, visible: s.visible })),
-      hero: { videoMediaId: draft.video?.id ?? null },
+      hero: { videoMediaId: draft.video?.id ?? null, videoType: draft.video ? draft.videoType : null },
       ribbon: draft.ribbon,
       maison: { heading: draft.heading, intro: draft.intro.trim() || null },
       floors: draft.floors.map((f) => ({
@@ -281,8 +284,9 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
             kind="video"
             value={draft.video}
             error={errors['hero.videoMediaId']}
-            hint="An MP4, up to 80 MB. It plays silently, full screen, on a loop. With nothing uploaded, the house's own campaign film plays."
-            onChange={(video) => set('video', video)}
+            type={draft.videoType}
+            hint="An MP4, MOV or M4V, up to 95 MB — H.264 plays on every phone and browser. It plays silently, full screen, on a loop, framed from the centre. With nothing uploaded, the house's own campaign film plays."
+            onChange={(video, type) => setDraft((d) => ({ ...d, video, videoType: video ? type ?? null : null }))}
           />
         </Card>
 

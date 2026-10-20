@@ -131,6 +131,58 @@ export const put = <T>(path: string, body?: unknown) => api<T>(path, { method: '
 export const patch = <T>(path: string, body?: unknown) => api<T>(path, { method: 'PATCH', body });
 export const del = <T>(path: string) => api<T>(path, { method: 'DELETE' });
 
+/**
+ * Upload one file as the raw request body, reporting how much has gone.
+ *
+ * A film is tens of megabytes and takes as long as the connection takes, so
+ * there is no 20-second limit here (api() has one, rightly, for everything
+ * else); `signal` cancels it. XHR rather than fetch, because only XHR reports
+ * upload progress. The name travels in a header, URI-encoded.
+ */
+export function uploadFile<T>(
+  path: string,
+  file: File,
+  { onProgress, signal }: { onProgress?: (sent: number, total: number) => void; signal?: AbortSignal } = {},
+  retried = false,
+): Promise<T> {
+  return (async () => {
+    if (!readCsrf()) await refreshCsrf(path);
+    return new Promise<T>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', path);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader('accept', 'application/json');
+      xhr.setRequestHeader('content-type', file.type || 'application/octet-stream');
+      xhr.setRequestHeader('x-file-name', encodeURIComponent(file.name));
+      const token = readCsrf();
+      if (token) xhr.setRequestHeader('x-csrf-token', token);
+      xhr.upload.onprogress = (e) => onProgress?.(e.loaded, e.lengthComputable ? e.total : file.size);
+      xhr.onerror = () => reject(new ApiError(0, { code: 'NETWORK', message: 'The upload was cut off. Check your connection and try again.' }));
+      xhr.onabort = () => reject(new ApiError(0, { code: 'NETWORK', message: 'The upload was cancelled.' }));
+      signal?.addEventListener('abort', () => xhr.abort(), { once: true });
+      xhr.onload = () => {
+        let data: unknown = null;
+        try {
+          data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+        } catch {
+          data = null;
+        }
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(data as T);
+        if (xhr.status === 413) {
+          return reject(new ApiError(413, { code: 'PAYLOAD_TOO_LARGE', message: 'That file is larger than the store accepts.' } as ApiErrorBody['error']));
+        }
+        const err = (data as ApiErrorBody | null)?.error ?? { code: 'INTERNAL' as ErrorCode, message: 'Something went wrong on our side.' };
+        if (err.code === 'CSRF_FAILED' && !retried) {
+          refreshCsrf(path).then(() => uploadFile<T>(path, file, { onProgress, signal }, true)).then(resolve, reject);
+          return;
+        }
+        reject(new ApiError(xhr.status, err));
+      };
+      xhr.send(file);
+    });
+  })();
+}
+
 /** Map ApiError.fields ("shippingAddress.city") onto a flat form. */
 export const fieldError = (err: unknown, field: string): string | undefined =>
   err instanceof ApiError ? err.fields[field] : undefined;

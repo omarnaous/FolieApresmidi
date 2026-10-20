@@ -34,10 +34,30 @@ const thrifty = () => {
 };
 const pickCut = () => (thrifty() ? OPENING[480] : OPENING[1080]);
 
+/** Whether this browser says it can play a film of this type ("" means no). */
+const playable = (type) => {
+  if (!type || typeof document === 'undefined') return true;
+  try {
+    return document.createElement('video').canPlayType(type) !== '';
+  } catch {
+    return true;
+  }
+};
+
 export default function Hero() {
-  // the film the owner uploaded, if any; otherwise the built-in campaign cut
-  const uploaded = useStore().data?.home?.hero?.video?.url ?? null;
+  /* The film the owner uploaded, if any; otherwise the built-in campaign cut.
+     The upload carries its codec (read in the admin), so a browser that cannot
+     play it — an HEVC film in Chrome on Android, say — is told before it
+     tries, and plays the house film. One that says yes and then fails to
+     decode falls back the same way. Until the store has answered nothing
+     loads, so the house film never flashes up before the owner's. */
+  const store = useStore();
+  const hero = store.data?.home?.hero;
+  const uploaded = hero?.video?.url ?? null;
   const [cut] = useState(pickCut);
+  const [failed, setFailed] = useState(null);
+  const own = !!uploaded && failed !== uploaded && playable(hero?.type);
+  const src = store.isPending ? undefined : own ? uploaded : cut;
   const film = useRef(null);
 
   /* iOS starts a film on its own only if it is muted as an attribute, not
@@ -48,8 +68,8 @@ export default function Hero() {
     el.muted = true;
     el.defaultMuted = true;
     el.setAttribute('muted', '');
-    el.play().catch(() => {});
-  }, [uploaded]);
+    if (src) el.play().catch(() => {});
+  }, [src]);
 
   /* Low Power Mode refuses every film a page starts on its own, whatever the
      page does. The still is already on screen, and iOS's own play button is
@@ -114,18 +134,21 @@ export default function Hero() {
       <div className="hero-poster" aria-hidden="true" />
 
       <div className="hero-film">
+        {/* the house film keeps its own last frame behind it; the owner's film
+            has no still of ours, and is framed from its centre */}
         <video
-          className="hero-vid"
+          className={`hero-vid${own ? ' is-own' : ''}`}
           ref={film}
-          src={uploaded || cut}
-          poster={OPENING.end}
+          src={src}
+          poster={own ? undefined : OPENING.end}
           autoPlay
           muted
           loop
           playsInline
           preload="auto"
           aria-hidden="true"
-          style={{ backgroundImage: `url(${OPENING.end})` }}
+          style={own ? undefined : { backgroundImage: `url(${OPENING.end})` }}
+          onError={() => { if (own) setFailed(uploaded); }}
         />
       </div>
 

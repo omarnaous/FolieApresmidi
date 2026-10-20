@@ -2,11 +2,11 @@ import { Hono } from 'hono';
 import { HomeInput, PageInput, SettingsInput, type AdminPageDTO, type SiteFileDTO } from '../../../shared/api';
 import { sendEmail } from '../../email/send';
 import * as templates from '../../email/templates';
-import { canStoreMedia, isKvMediaStore, putMedia } from '../../lib/media-store';
+import { canStoreMedia, isKvMediaStore, putMediaStream } from '../../lib/media-store';
 import { purge, TAGS } from '../../lib/cache';
 import { AppError, invalid, notFound } from '../../lib/errors';
 import { slugify, ulid } from '../../lib/ids';
-import { MAX_SITE_FILE_BYTES, sniffSiteFile } from '../../lib/images';
+import { MAX_SITE_FILE_BYTES, SITE_FILE_SNIFF_BYTES, sniffSiteFile } from '../../lib/images';
 import { mediaUrl } from '../../services/media';
 import { sanitizeHtml } from '../../lib/sanitize';
 import { json } from '../../lib/validate';
@@ -84,24 +84,96 @@ adminSettings.get('/home', staffOnly('settings:write'), async (c) => {
   return c.json(await adminHomeDTO(c.env.DB, readHome(row?.home_json), row?.updated_at ?? 0));
 });
 
+/** Read a body's first `need` bytes, and hand back a stream that still starts at byte 0. */
+async function peek(body: ReadableStream<Uint8Array>, need: number): Promise<{ head: Uint8Array; stream: ReadableStream<Uint8Array> }> {
+  const reader = body.getReader();
+  const parts: Uint8Array[] = [];
+  let got = 0;
+  while (got < need) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value?.byteLength) {
+      parts.push(value);
+      got += value.byteLength;
+    }
+  }
+  const head = new Uint8Array(got);
+  let at = 0;
+  for (const p of parts) {
+    head.set(p, at);
+    at += p.byteLength;
+  }
+  const stream = new ReadableStream<Uint8Array>({
+    start(ctl) {
+      if (head.byteLength) ctl.enqueue(head);
+    },
+    async pull(ctl) {
+      const { done, value } = await reader.read();
+      if (done) ctl.close();
+      else ctl.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+  return { head, stream };
+}
+
 /**
- * The two files the site itself uses: the opening film (mp4) and the notebook
- * (pdf) the Limited edition section hands out. One file per request — a film
- * is large — stored beside the brand images and referenced by the home page.
+ * The two files the site itself uses: the opening film and the notebook
+ * (pdf) the Limited edition section hands out, stored beside the brand images
+ * and referenced by the home page.
+ *
+ * The file is the request body itself — not a form — and it is streamed into
+ * storage as it arrives. A Worker has 128 MB; reading a film into memory, as
+ * a form must, needed twice the film and failed on anything sizeable. The
+ * first bytes are read to tell what it is (never the name or the declared
+ * type), then the rest flows straight through.
  */
 adminSettings.post('/site-files', staffOnly('settings:write'), async (c) => {
   const staff = c.get('staff')!;
-  const length = Number(c.req.header('content-length') ?? 0);
-  if (length > MAX_SITE_FILE_BYTES + 5 * 1024 * 1024) throw new AppError('PAYLOAD_TOO_LARGE', 'That file is too large');
+  let body = c.req.raw.body;
+  if (!body) throw invalid({ file: 'Choose a file' });
+  let length = Number(c.req.header('content-length') ?? NaN);
+  /* A browser always says how long the file is, and then it streams. A
+     client that does not is read in full first — refused past the ceiling as
+     it arrives — since storage has to know the length before it starts. */
+  if (!Number.isFinite(length)) {
+    const parts: Uint8Array[] = [];
+    let got = 0;
+    const reader = body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      got += value.byteLength;
+      if (got > MAX_SITE_FILE_BYTES) {
+        await reader.cancel();
+        throw invalid({ file: `That file is larger than ${Math.round(MAX_SITE_FILE_BYTES / 1024 / 1024)} MB. Export it smaller and try again.` });
+      }
+      parts.push(value);
+    }
+    length = got;
+    body = new Blob(parts).stream();
+  }
+  if (length <= 0) throw invalid({ file: 'Choose a file' });
+  if (length > MAX_SITE_FILE_BYTES) {
+    throw invalid({ file: `That file is ${Math.round(length / 1024 / 1024)} MB — the limit is ${Math.round(MAX_SITE_FILE_BYTES / 1024 / 1024)} MB. Export it smaller and try again.` });
+  }
+  const raw = c.req.header('x-file-name') ?? '';
+  let name = '';
+  try {
+    name = decodeURIComponent(raw);
+  } catch {
+    name = raw;
+  }
+  name = name.replace(/[\u0000-\u001f]/g, '').slice(0, 120);
 
-  const form = await c.req.formData();
-  const file = form.get('file');
-  if (!(file instanceof File)) throw invalid({ file: 'Choose a file' });
-  if (file.size > MAX_SITE_FILE_BYTES) throw invalid({ file: `${file.name} is larger than ${Math.round(MAX_SITE_FILE_BYTES / 1024 / 1024)} MB` });
-
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const kind = sniffSiteFile(bytes);
-  if (!kind) throw invalid({ file: `${file.name} is not an MP4 video or a PDF` });
+  const { head, stream } = await peek(body, SITE_FILE_SNIFF_BYTES);
+  const kind = sniffSiteFile(head);
+  if (!kind) {
+    await stream.cancel();
+    throw invalid({ file: `${name || 'That file'} is not an MP4, MOV or M4V video, or a PDF` });
+  }
 
   if (!canStoreMedia(c.env)) throw new AppError('BAD_REQUEST', 'There is nowhere to keep files in this environment.');
   /* A film is streamed, and streaming means answering for a slice of the file
@@ -109,20 +181,27 @@ adminSettings.post('/site-files', staffOnly('settings:write'), async (c) => {
      opening film plays, and that is said plainly rather than storing a video
      that would refuse to play on a phone. */
   if (kind.mime.startsWith('video/') && isKvMediaStore(c.env)) {
+    await stream.cancel();
     throw invalid({ file: 'This shop keeps files in KV, which cannot stream video. The house film plays instead — turn on R2 to upload your own.' });
   }
   const now = Date.now();
   const id = ulid(now);
   const key = `brand/${new Date(now).getUTCFullYear()}/${id.toLowerCase()}.${kind.ext}`;
-  await putMedia(c.env, key, bytes, kind.mime);
-  const name = file.name.slice(0, 120) || `file.${kind.ext}`;
+  try {
+    await putMediaStream(c.env, key, stream, length, kind.mime);
+  } catch (err) {
+    // a connection dropped mid-upload leaves a stream shorter than it said it was
+    if (err instanceof AppError) throw err;
+    throw invalid({ file: 'The upload was interrupted before the whole file arrived. Try again.' });
+  }
+  name = name || `file.${kind.ext}`;
   await c.env.DB.prepare('INSERT INTO media (id, r2_key, source_url, mime, bytes, width, height, alt, created_by, created_at) VALUES (?, ?, NULL, ?, ?, NULL, NULL, ?, ?, ?)')
-    .bind(id, key, kind.mime, bytes.byteLength, name, staff.id, now)
+    .bind(id, key, kind.mime, length, name, staff.id, now)
     .run();
   await audit(c, 'media.uploaded', 'media', id, `Uploaded ${name}`);
 
-  const body: SiteFileDTO = { id, url: mediaUrl(key), mime: kind.mime, bytes: bytes.byteLength, name };
-  return c.json(body, 201);
+  const out: SiteFileDTO = { id, url: mediaUrl(key), mime: kind.mime, bytes: length, name };
+  return c.json(out, 201);
 });
 
 adminSettings.put('/home', staffOnly('settings:write'), json(HomeInput), async (c) => {

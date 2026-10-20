@@ -618,6 +618,9 @@
 .adm .adm-poprow > .adm-orderlist__pos { padding-top: 11px; }
 .adm .adm-poprow > .adm-row { padding-top: 5px; }
 .adm .adm-sitefile { margin-top: 8px; }
+.adm .adm-sitefile__warn { max-width: 520px; color: var(--a-warn, #9a5b00); }
+.adm .adm-sitefile__bar { display: block; max-width: 420px; height: 3px; margin-top: 10px; background: var(--ink-07); overflow: hidden; border-radius: 2px; }
+.adm .adm-sitefile__bar i { display: block; height: 100%; background: var(--terra, #c4522c); transition: width 0.2s linear; }
 .adm .adm-sitefile__video { width: 100%; max-width: 420px; border-radius: 10px; background: var(--a-tile); display: block; }
 .adm .adm-sitefile__pdf {
   display: inline-flex; align-items: baseline; gap: 12px;

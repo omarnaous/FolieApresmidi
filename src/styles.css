@@ -2831,6 +2831,8 @@ section[id] { scroll-margin-top: calc(var(--nav-h) + 12px); }
   -webkit-appearance: none;
   opacity: 0 !important;
 }
+/* the owner's own film: framed from its centre, with no house still behind it */
+.hero-vid.is-own { object-position: 50% 50%; background: none; }
 .hero-vid {
   pointer-events: none;
   width: 100%;
