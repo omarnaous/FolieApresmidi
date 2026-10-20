@@ -215,6 +215,7 @@ adminSettings.put('/home', staffOnly('settings:write'), json(HomeInput), async (
       ...home.floors.flatMap((f) => (f.imageMediaId ? [f.imageMediaId] : [])),
       ...home.lookbook.imageMediaIds,
       ...(home.hero.videoMediaId ? [home.hero.videoMediaId] : []),
+      ...(home.hero.phoneMediaId ? [home.hero.phoneMediaId] : []),
       ...(home.journal.notebookMediaId ? [home.journal.notebookMediaId] : []),
     ]),
   ];
@@ -228,6 +229,7 @@ adminSettings.put('/home', staffOnly('settings:write'), json(HomeInput), async (
       if (!known.has(id)) fields[`lookbook.images.${i}`] = 'That image no longer exists';
     });
     if (home.hero.videoMediaId && !known.has(home.hero.videoMediaId)) fields['hero.videoMediaId'] = 'That video no longer exists — upload it again';
+    if (home.hero.phoneMediaId && !known.has(home.hero.phoneMediaId)) fields['hero.phoneMediaId'] = 'That video no longer exists — upload it again';
     if (home.journal.notebookMediaId && !known.has(home.journal.notebookMediaId)) fields['journal.notebookMediaId'] = 'That notebook no longer exists — upload it again';
   }
   const handles = [...new Set(home.floors.flatMap((f) => (f.collectionHandle ? [f.collectionHandle] : [])))];

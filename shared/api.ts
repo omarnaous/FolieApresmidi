@@ -223,7 +223,17 @@ export interface HomeDTO {
    * when it was uploaded (`video/mp4; codecs="avc1.640028"`), so a browser
    * that cannot play it can tell before trying — and play the house film.
    */
-  hero: { video: MediaDTO | null; type: string | null };
+  hero: {
+    video: MediaDTO | null;
+    type: string | null;
+    /**
+     * An optional vertical cut that a phone held upright plays instead. With
+     * none, a landscape film is shown whole on a phone, over a blurred copy
+     * of itself, rather than cropped to its middle third.
+     */
+    phone: MediaDTO | null;
+    phoneType: string | null;
+  };
   /** The words that run round the ribbon under the film. */
   ribbon: string[];
   maison: { heading: string; intro: string | null };
@@ -1501,7 +1511,7 @@ export type SettingsInput = z.input<typeof SettingsInput>;
 /** GET /api/admin/home. A floor's `image` is only the one chosen here; `fallback` is what shows without it. */
 export interface AdminHomeDTO {
   sections: HomeSectionDTO[];
-  hero: { video: MediaDTO | null; type: string | null };
+  hero: HomeDTO['hero'];
   ribbon: string[];
   maison: { heading: string; intro: string | null };
   floors: (Omit<FloorDTO, 'image'> & { image: MediaDTO | null; fallback: MediaDTO | null })[];
@@ -1533,6 +1543,15 @@ export const MAX_LOOKBOOK = 40;
 const zHeading = z.string().trim().min(1, 'Required').max(80);
 const zLine = (max: number) => z.string().trim().max(max).nullish().transform((v) => v || null);
 
+/** A film's MIME type with its codec, as the admin reads it: `video/mp4; codecs="avc1.640028"`. */
+const zVideoType = z
+  .string()
+  .trim()
+  .max(120)
+  .regex(/^video\/mp4(; ?codecs="[A-Za-z0-9.,_ -]+")?$/, 'Not a video type')
+  .nullish()
+  .transform((v) => v || null);
+
 export const HomeInput = z.object({
   sections: z
     .array(
@@ -1549,15 +1568,12 @@ export const HomeInput = z.object({
   hero: z
     .object({
       videoMediaId: zId.nullable().default(null),
-      videoType: z
-        .string()
-        .trim()
-        .max(120)
-        .regex(/^video\/mp4(; ?codecs="[A-Za-z0-9.,_ -]+")?$/, 'Not a video type')
-        .nullish()
-        .transform((v) => v || null),
+      videoType: zVideoType,
+      /** the vertical cut a phone plays, if there is one */
+      phoneMediaId: zId.nullish().transform((v) => v ?? null),
+      phoneType: zVideoType,
     })
-    .default({ videoMediaId: null, videoType: null }),
+    .default({ videoMediaId: null, videoType: null, phoneMediaId: null, phoneType: null }),
   ribbon: z.array(z.string().trim().min(1, 'Write a word or take the row out').max(40)).max(MAX_RIBBON).default([]),
   maison: z.object({
     heading: zHeading,

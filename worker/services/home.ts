@@ -20,7 +20,7 @@ interface StoredFloor {
 
 export interface Home {
   sections: HomeSectionDTO[];
-  hero: { videoMediaId: string | null; videoType?: string | null };
+  hero: { videoMediaId: string | null; videoType?: string | null; phoneMediaId?: string | null; phoneType?: string | null };
   ribbon: string[];
   maison: { heading: string; intro: string | null };
   floors: StoredFloor[];
@@ -105,7 +105,12 @@ export function readHome(json: string | null | undefined): Home {
     sections,
     // every field below falls back on its own: a store that saved before a
     // section (or a whole piece of copy) existed still reads as it did then
-    hero: { videoMediaId: stored.hero?.videoMediaId ?? null, videoType: stored.hero?.videoType ?? null },
+    hero: {
+      videoMediaId: stored.hero?.videoMediaId ?? null,
+      videoType: stored.hero?.videoType ?? null,
+      phoneMediaId: stored.hero?.phoneMediaId ?? null,
+      phoneType: stored.hero?.phoneType ?? null,
+    },
     ribbon: stored.ribbon?.length ? stored.ribbon : HOME_DEFAULTS.ribbon,
     maison: stored.maison ?? HOME_DEFAULTS.maison,
     floors: stored.floors?.length ? stored.floors : HOME_DEFAULTS.floors,
@@ -125,7 +130,12 @@ export function readHome(json: string | null | undefined): Home {
 /** The document PUT /api/admin/home stores, from its validated input. */
 export const homeFromInput = (input: HomeInput): Home => ({
   sections: input.sections.map((s) => ({ key: s.key, label: s.label, navLabel: s.navLabel, visible: s.visible ?? true })),
-  hero: { videoMediaId: input.hero?.videoMediaId ?? null, videoType: input.hero?.videoMediaId ? input.hero?.videoType ?? null : null },
+  hero: {
+    videoMediaId: input.hero?.videoMediaId ?? null,
+    videoType: input.hero?.videoMediaId ? input.hero?.videoType ?? null : null,
+    phoneMediaId: input.hero?.phoneMediaId ?? null,
+    phoneType: input.hero?.phoneMediaId ? input.hero?.phoneType ?? null : null,
+  },
   ribbon: (input.ribbon ?? []).map((w) => w.trim()).filter(Boolean),
   maison: { heading: input.maison.heading, intro: input.maison.intro ?? null },
   floors: input.floors.map((f) => ({
@@ -232,13 +242,16 @@ async function resolveFloors(d1: D1Database, floors: StoredFloor[]) {
   });
 }
 
-/** The film and the notebook, which are ordinary media rows holding a video and a PDF. */
+/** The films and the notebook, which are ordinary media rows holding a video and a PDF. */
 async function resolveFiles(d1: D1Database, home: Home) {
-  const ids = [home.hero.videoMediaId, home.journal.notebookMediaId].filter((id): id is string => !!id);
+  const ids = [home.hero.videoMediaId, home.hero.phoneMediaId, home.journal.notebookMediaId].filter((id): id is string => !!id);
   const media = await mediaByIdsRaw(d1, ids);
+  const of = (id: string | null | undefined) => (id ? media.get(id) ?? null : null);
+  const video = of(home.hero.videoMediaId);
+  const phone = of(home.hero.phoneMediaId);
   return {
-    video: home.hero.videoMediaId ? media.get(home.hero.videoMediaId) ?? null : null,
-    notebook: home.journal.notebookMediaId ? media.get(home.journal.notebookMediaId) ?? null : null,
+    hero: { video, type: video ? home.hero.videoType ?? null : null, phone, phoneType: phone ? home.hero.phoneType ?? null : null },
+    notebook: of(home.journal.notebookMediaId),
   };
 }
 
@@ -251,9 +264,9 @@ async function resolveLookbook(d1: D1Database, home: Home) {
 }
 
 /** The copy shared by both DTOs, so the shop and the admin can never disagree. */
-const common = (home: Home, notebook: MediaDTO | null, video: MediaDTO | null, lookbook: HomeDTO['lookbook']) => ({
+const common = (home: Home, notebook: MediaDTO | null, hero: HomeDTO['hero'], lookbook: HomeDTO['lookbook']) => ({
   sections: home.sections,
-  hero: { video, type: video ? home.hero.videoType ?? null : null },
+  hero,
   ribbon: home.ribbon,
   maison: home.maison,
   boutique: home.boutique,
@@ -265,7 +278,7 @@ const common = (home: Home, notebook: MediaDTO | null, video: MediaDTO | null, l
 });
 
 export async function homeDTO(d1: D1Database, home: Home): Promise<HomeDTO> {
-  const [{ video, notebook }, resolved, lookbook] = await Promise.all([
+  const [{ hero, notebook }, resolved, lookbook] = await Promise.all([
     resolveFiles(d1, home),
     resolveFloors(d1, home.floors),
     resolveLookbook(d1, home),
@@ -277,11 +290,11 @@ export async function homeDTO(d1: D1Database, home: Home): Promise<HomeDTO> {
     category: floor.category ?? null,
     image: chosen ?? fallback,
   }));
-  return { ...common(home, notebook, video, lookbook), floors };
+  return { ...common(home, notebook, hero, lookbook), floors };
 }
 
 export async function adminHomeDTO(d1: D1Database, home: Home, updatedAt: number): Promise<AdminHomeDTO> {
-  const [{ video, notebook }, resolved, lookbook] = await Promise.all([
+  const [{ hero, notebook }, resolved, lookbook] = await Promise.all([
     resolveFiles(d1, home),
     resolveFloors(d1, home.floors),
     resolveLookbook(d1, home),
@@ -294,5 +307,5 @@ export async function adminHomeDTO(d1: D1Database, home: Home, updatedAt: number
     image: chosen,
     fallback,
   }));
-  return { ...common(home, notebook, video, lookbook), floors, updatedAt };
+  return { ...common(home, notebook, hero, lookbook), floors, updatedAt };
 }

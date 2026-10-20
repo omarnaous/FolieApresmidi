@@ -62,6 +62,9 @@ interface HomeDraft {
   video: MediaDTO | null;
   /** the film's MIME type with its codec, read when it was uploaded */
   videoType: string | null;
+  /** the optional vertical cut a phone plays instead */
+  phone: MediaDTO | null;
+  phoneType: string | null;
   ribbon: string[];
   heading: string;
   intro: string;
@@ -88,6 +91,8 @@ const fromDTO = (h: AdminHomeDTO): HomeDraft => ({
   sections: h.sections.map((s) => ({ key: s.key, label: s.label, navLabel: s.navLabel, visible: s.visible })),
   video: h.hero.video,
   videoType: h.hero.type,
+  phone: h.hero.phone,
+  phoneType: h.hero.phoneType,
   ribbon: h.ribbon,
   heading: h.maison.heading,
   intro: h.maison.intro ?? '',
@@ -167,7 +172,12 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
   /** What PUT /api/admin/home is sent for a draft. */
   const bodyOf = (draft: HomeDraft): HomeInput => ({
       sections: draft.sections.map((s) => ({ key: s.key, label: s.label, navLabel: s.navLabel, visible: s.visible })),
-      hero: { videoMediaId: draft.video?.id ?? null, videoType: draft.video ? draft.videoType : null },
+      hero: {
+        videoMediaId: draft.video?.id ?? null,
+        videoType: draft.video ? draft.videoType : null,
+        phoneMediaId: draft.phone?.id ?? null,
+        phoneType: draft.phone ? draft.phoneType : null,
+      },
       ribbon: draft.ribbon,
       maison: { heading: draft.heading, intro: draft.intro.trim() || null },
       floors: draft.floors.map((f) => ({
@@ -203,17 +213,25 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
      here takes it as done. So it is saved at once — on top of the page as
      last saved, never with other edits still being made here, which wait for
      Save as before. */
+  type Films = Pick<HomeDraft, 'video' | 'videoType' | 'phone' | 'phoneType'>;
   const saveFilm = useMutation({
-    mutationFn: (film: { video: MediaDTO | null; videoType: string | null }) =>
-      put<AdminHomeDTO>('/api/admin/home', bodyOf({ ...base, ...film })),
-    onSuccess: (dto) => {
+    mutationFn: (patch: Partial<Films>) => put<AdminHomeDTO>('/api/admin/home', bodyOf({ ...base, ...patch })),
+    onSuccess: (dto, patch) => {
       qc.setQueryData(qk.home, dto);
       void qc.invalidateQueries({ queryKey: qk.store });
       setSaved(dto);
-      const film = { video: dto.hero.video, videoType: dto.hero.type };
-      setBase((b) => ({ ...b, ...film }));
-      setDraft((d) => ({ ...d, ...film }));
-      toast.success(dto.hero.video ? 'The film is on the website' : 'The house film is back on the website');
+      const films: Films = { video: dto.hero.video, videoType: dto.hero.type, phone: dto.hero.phone, phoneType: dto.hero.phoneType };
+      setBase((b) => ({ ...b, ...films }));
+      setDraft((d) => ({ ...d, ...films }));
+      toast.success(
+        'phone' in patch
+          ? dto.hero.phone
+            ? 'The phone film is on the website'
+            : 'Phones show the main film again'
+          : dto.hero.video
+            ? 'The film is on the website'
+            : 'The house film is back on the website',
+      );
     },
     onError: (err) => {
       setErrors(apiFieldErrors(err));
@@ -305,6 +323,7 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
         </Card>
 
         <Card title="01 — The film">
+          <div className="adm-stack">
           <SiteFileField
             label="Opening film"
             kind="video"
@@ -318,6 +337,20 @@ function HomeForm({ home }: { home: AdminHomeDTO }) {
               saveFilm.mutate(film);
             }}
           />
+          <SiteFileField
+            label="Phone film (vertical, optional)"
+            kind="video"
+            value={draft.phone}
+            type={draft.phoneType}
+            error={errors['hero.phoneMediaId']}
+            hint="A 9:16 cut of the same film, for a phone held upright. Without one, a landscape film is shown whole on a phone over a soft, blurred copy of itself — never cropped. Goes on the website as soon as it has uploaded."
+            onChange={(phone, type) => {
+              const film = { phone, phoneType: phone ? type ?? null : null };
+              setDraft((d) => ({ ...d, ...film }));
+              saveFilm.mutate(film);
+            }}
+          />
+          </div>
         </Card>
 
         <Card title={cardTitle('maison', maisonName)}>
